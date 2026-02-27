@@ -1,6 +1,25 @@
 import { supabase } from '../../db/supabase.js';
 import { getSydneyDate } from '../../utils/sydneyDate.js';
 
+async function notifySlackFailure(functionName: string, errorMsg: string): Promise<void> {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  const text =
+    `:warning: *Pulse agent failed* — \`${functionName}\`\n` +
+    `Error: ${errorMsg}`;
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+  } catch (err) {
+    console.error('[runLogger] Failed to send Slack failure notification:', err);
+  }
+}
+
 /**
  * Wraps an agent function with run_log tracking.
  * Records start time, duration, result, and any errors.
@@ -40,6 +59,7 @@ export async function withRunLog<T>(
     });
 
     console.error(`[${functionName}] Failed after ${durationMs}ms: ${errorMsg}`);
+    await notifySlackFailure(functionName, errorMsg);
     throw err;
   }
 }
