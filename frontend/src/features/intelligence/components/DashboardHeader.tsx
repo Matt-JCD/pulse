@@ -3,6 +3,7 @@
 import type { RunLogEntry } from '@/lib/api';
 import { useEffect, useState } from 'react';
 import { useIntelligence } from '../useIntelligence';
+import { getSydneyDate } from '@/lib/sydneyDate';
 
 interface Props {
   runLog: RunLogEntry[];
@@ -60,9 +61,7 @@ export function DashboardHeader({ runLog }: Props) {
   const lastSuccessRun = runLog.find((r) => r.status === 'success');
 
   // Total tokens from today's successful runs (for cost display)
-  const todayStr = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Sydney',
-  }).format(new Date()); // YYYY-MM-DD
+  const todayStr = getSydneyDate();
 
   const todayTokens = runLog
     .filter((r) => r.status === 'success' && r.llm_tokens && r.date === todayStr)

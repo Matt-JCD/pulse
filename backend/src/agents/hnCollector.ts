@@ -2,6 +2,7 @@ import { supabase } from '../db/supabase.js';
 import { extractWithHaiku } from './shared/haiku.js';
 import { withRunLog } from './shared/runLogger.js';
 import { getSydneyDate } from '../utils/sydneyDate.js';
+import { buildTopicKey } from '../utils/topicKey.js';
 
 const HN_ALGOLIA_URL = 'https://hn.algolia.com/api/v1';
 
@@ -126,6 +127,7 @@ export async function hnCollector(isMonday = false) {
           date: today,
           platform: 'hackernews',
           keyword: t.keyword,
+          topic_key: buildTopicKey(category, t.keyword, t.topic_title),
           topic_title: t.topic_title,
           summary: t.summary,
           post_count: t.post_count,
@@ -134,8 +136,24 @@ export async function hnCollector(isMonday = false) {
         }));
         const { error } = await supabase
           .from('emerging_topics')
-          .upsert(topicRows, { onConflict: 'date,platform,category,topic_title' });
-        if (error) console.error(`[hn-collector] Topic write error (${category}):`, error.message);
+          .upsert(topicRows, { onConflict: 'date,platform,category,topic_key' });
+        if (error) {
+          const shouldFallback =
+            error.message.includes('topic_key') ||
+            error.message.includes('uq_emerging_topics_daily_topic');
+
+          if (!shouldFallback) {
+            console.error(`[hn-collector] Topic write error (${category}):`, error.message);
+          } else {
+            const fallbackRows = topicRows.map(({ topic_key: _topicKey, ...row }) => row);
+            const { error: fallbackError } = await supabase
+              .from('emerging_topics')
+              .upsert(fallbackRows, { onConflict: 'date,platform,category,topic_title' });
+            if (fallbackError) {
+              console.error(`[hn-collector] Topic fallback write error (${category}):`, fallbackError.message);
+            }
+          }
+        }
       }
 
       console.log(`[hn-collector] ${category}: ${result.keyword_signals.length} signals, ${result.emerging_topics.length} topics.`);

@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS emerging_topics (
   date         DATE NOT NULL,
   platform     TEXT NOT NULL,
   keyword      TEXT NOT NULL,
+  topic_key    TEXT NOT NULL,
   topic_title  TEXT NOT NULL,
   summary      TEXT NOT NULL,
   post_count   INTEGER NOT NULL,
@@ -64,7 +65,9 @@ CREATE TABLE IF NOT EXISTS emerging_topics (
   created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_emerging_topics_daily_topic
-  ON emerging_topics (date, platform, category, topic_title);
+  ON emerging_topics (date, platform, category, topic_key);
+CREATE INDEX IF NOT EXISTS idx_emerging_topics_topic_key
+  ON emerging_topics (topic_key);
 
 -- 005: Daily Report (synthesizer output)
 CREATE TABLE IF NOT EXISTS daily_report (
@@ -147,7 +150,9 @@ INSERT INTO _migrations (name) VALUES
   ('008_post_analytics.sql'),
   ('009_inbox_items.sql'),
   ('010_alter_daily_report.sql'),
-  ('011_emerging_topics_unique.sql')
+  ('011_emerging_topics_unique.sql'),
+  ('012_emerging_topics_topic_key.sql'),
+  ('013_emerging_topics_unique_by_key.sql')
 ON CONFLICT (name) DO NOTHING;
 
 -- Seed: default config

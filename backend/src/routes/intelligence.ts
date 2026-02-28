@@ -5,9 +5,28 @@ import { redditCollector } from '../agents/redditCollector.js';
 import { twitterCollector } from '../agents/twitterCollector.js';
 import { synthesizer } from '../agents/synthesizer.js';
 import { getSydneyDate, getSydneyDateOffset } from '../utils/sydneyDate.js';
+import { buildTopicKey } from '../utils/topicKey.js';
 
 const router = Router();
 const VALID_PLATFORMS = new Set(['hackernews', 'reddit', 'twitter', 'synthesizer']);
+
+interface TopicRow {
+  id: number;
+  date: string;
+  platform: string;
+  keyword: string;
+  topic_key: string | null;
+  topic_title: string;
+  summary: string;
+  post_count: number;
+  sample_urls: string[] | null;
+  category: string;
+  created_at: string;
+}
+
+function topicKey(topic: Pick<TopicRow, 'category' | 'keyword' | 'topic_title'>): string {
+  return buildTopicKey(topic.category, topic.keyword, topic.topic_title);
+}
 
 // GET /api/intelligence/today — today's daily_report
 router.get('/api/intelligence/today', async (_req, res) => {
@@ -68,6 +87,9 @@ router.get('/api/intelligence/keywords', async (req, res) => {
 router.get('/api/intelligence/topics', async (req, res) => {
   const days = parseInt(req.query.days as string) || 7;
   const since = getSydneyDateOffset(-days);
+  const today = getSydneyDate();
+  const yesterday = getSydneyDateOffset(-1);
+  const mode = (req.query.mode as string | undefined) || 'all';
 
   const { data, error } = await supabase
     .from('emerging_topics')
@@ -80,7 +102,34 @@ router.get('/api/intelligence/topics', async (req, res) => {
     return;
   }
 
-  res.json(data);
+  const topics = (data || []) as TopicRow[];
+  if (mode !== 'active') {
+    res.json(topics);
+    return;
+  }
+
+  // Active mode: keep only topic keys seen today or yesterday,
+  // plus top high-volume keys across the full window, and return
+  // their rows for the full requested window so trends remain visible.
+  const activeKeys = new Set<string>();
+  const totalsByKey = new Map<string, number>();
+
+  for (const topic of topics) {
+    const key = topic.topic_key || topicKey(topic);
+    totalsByKey.set(key, (totalsByKey.get(key) ?? 0) + topic.post_count);
+    if (topic.date !== today && topic.date !== yesterday) continue;
+    activeKeys.add(key);
+  }
+
+  const TOP_WINDOW_KEYS = 20;
+  const topKeys = [...totalsByKey.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TOP_WINDOW_KEYS)
+    .map(([key]) => key);
+  for (const key of topKeys) activeKeys.add(key);
+
+  const filtered = topics.filter((topic) => activeKeys.has(topic.topic_key || topicKey(topic)));
+  res.json(filtered);
 });
 
 // GET /api/intelligence/run-log — agent run history

@@ -3,6 +3,7 @@ import { hnCollector } from './agents/hnCollector.js';
 import { redditCollector } from './agents/redditCollector.js';
 import { twitterCollector } from './agents/twitterCollector.js';
 import { synthesizer } from './agents/synthesizer.js';
+import { autoDraftDailyPosts } from './composer/drafting.js';
 import { getSydneyDayOfWeek } from './utils/sydneyDate.js';
 
 export function startScheduler(): void {
@@ -16,17 +17,20 @@ export function startScheduler(): void {
       const label = isMonday ? 'Monday (weekend roundup)' : 'Daily';
       console.log(`[scheduler] ── ${label} run starting ──`);
       try {
-        console.log('[scheduler] Step 1/4: HN collector');
+        console.log('[scheduler] Step 1/5: HN collector');
         await hnCollector(isMonday);
 
-        console.log('[scheduler] Step 2/4: Reddit collector');
+        console.log('[scheduler] Step 2/5: Reddit collector');
         await redditCollector(isMonday);
 
-        console.log('[scheduler] Step 3/4: Twitter collector');
+        console.log('[scheduler] Step 3/5: Twitter collector');
         await twitterCollector(isMonday);
 
-        console.log('[scheduler] Step 4/4: Synthesizer');
+        console.log('[scheduler] Step 4/5: Synthesizer');
         await synthesizer();
+
+        console.log('[scheduler] Step 5/5: Composer auto-draft');
+        await autoDraftDailyPosts();
 
         console.log(`[scheduler] ── ${label} run complete ──`);
       } catch (err) {

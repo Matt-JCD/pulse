@@ -45,7 +45,7 @@ export async function fetchKeywordSignals(days = 14): Promise<KeywordSignal[]> {
 
 export async function fetchTopics(days = 7): Promise<EmergingTopic[]> {
   try {
-    return await get<EmergingTopic[]>(`/api/intelligence/topics?days=${days}`);
+    return await get<EmergingTopic[]>(`/api/intelligence/topics?days=${days}&mode=active`);
   } catch {
     return [];
   }

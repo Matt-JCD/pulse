@@ -1,172 +1,50 @@
 'use client';
 
 import React from 'react';
-import {
-  LineChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 import type { EmergingTopic } from '@/lib/api';
+import {
+  buildTrendTopics,
+  getNewTodayTop,
+  getTrendingOverallTop,
+  type TrendTopic,
+} from '../trendModel';
 
 const TOP_N = 5;
 
 interface Props {
   topics: EmergingTopic[];
-  todayDate: string; // YYYY-MM-DD
+  todayDate: string;
 }
 
-interface SparklineData {
-  date: string;
-  posts: number;
+function formatDate(value: string): string {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
-interface TopicSpark {
-  title: string;
-  data: SparklineData[];
-  todayCount: number;
-  yesterdayCount: number;
-  total: number;
-  todayRank: number;       // 1-based rank by post_count today
-  yesterdayRank: number | null; // null = wasn't present yesterday
+function toneForState(state: TrendTopic['trendState']): string {
+  if (state === 'new' || state === 'rising') return 'text-aqua';
+  if (state === 'fading') return 'text-red-400';
+  return 'text-zinc-500';
 }
 
-function getYesterday(todayDate: string): string {
-  const [y, m, d] = todayDate.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() - 1);
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
+function rankLabel(rank: number | null): string {
+  return rank ? `#${rank}` : '-';
 }
 
-function buildSparklines(
-  topics: EmergingTopic[],
-  category: string,
-  todayDate: string,
-): TopicSpark[] {
-  const yesterday = getYesterday(todayDate);
-  const allDates = Array.from(new Set(topics.map((t) => t.date))).sort();
+function SparkCard({ topic, color }: { topic: TrendTopic; color: string }) {
+  const ageLabel = topic.isNewToday ? 'new' : 'old';
 
-  // Group by topic_title, summing post_count per date
-  const byTitle = new Map<string, Map<string, number>>();
-  for (const t of topics) {
-    if (t.category !== category) continue;
-    if (!byTitle.has(t.topic_title)) byTitle.set(t.topic_title, new Map());
-    const dayMap = byTitle.get(t.topic_title)!;
-    dayMap.set(t.date, (dayMap.get(t.date) ?? 0) + t.post_count);
-  }
-
-  // First pass — build sparks with raw counts
-  type RawSpark = Omit<TopicSpark, 'todayRank' | 'yesterdayRank'>;
-  const raw: RawSpark[] = [];
-
-  for (const [title, dayMap] of byTitle) {
-    const data = allDates.map((date) => ({
-      date,
-      posts: dayMap.get(date) ?? 0,
-    }));
-    const total = Array.from(dayMap.values()).reduce((a, b) => a + b, 0);
-    const todayCount = dayMap.get(todayDate) ?? 0;
-    const yesterdayCount = dayMap.get(yesterday) ?? 0;
-    raw.push({ title, data, todayCount, yesterdayCount, total });
-  }
-
-  // Rank by today's post_count
-  const todaySorted = [...raw]
-    .filter((s) => s.todayCount > 0)
-    .sort((a, b) => b.todayCount - a.todayCount);
-  const todayRankMap = new Map(todaySorted.map((s, i) => [s.title, i + 1]));
-
-  // Rank by yesterday's post_count
-  const yesterdaySorted = [...raw]
-    .filter((s) => s.yesterdayCount > 0)
-    .sort((a, b) => b.yesterdayCount - a.yesterdayCount);
-  const yesterdayRankMap = new Map(yesterdaySorted.map((s, i) => [s.title, i + 1]));
-
-  const sparks: TopicSpark[] = raw.map((s) => ({
-    ...s,
-    todayRank: todayRankMap.get(s.title) ?? 0,
-    yesterdayRank: yesterdayRankMap.get(s.title) ?? null,
-  }));
-
-  // Take the top N by TODAY's rank (most active today), left-to-right = rank 1→5
-  return sparks
-    .filter((s) => s.todayRank > 0)          // only topics active today
-    .sort((a, b) => a.todayRank - b.todayRank) // rank 1 first
-    .slice(0, TOP_N);
-}
-
-// ─── Rank badge ──────────────────────────────────────────────────────────────
-
-function RankBadge({
-  todayRank,
-  yesterdayRank,
-}: {
-  todayRank: number;
-  yesterdayRank: number | null;
-}) {
-  if (todayRank === 0) return null;
-
-  let movement: React.ReactNode;
-
-  if (yesterdayRank === null) {
-    movement = (
-      <span className="text-[10px] font-medium text-aqua">new</span>
-    );
-  } else {
-    const delta = yesterdayRank - todayRank; // positive = climbed, negative = dropped
-    if (delta > 0) {
-      movement = (
-        <span className="text-[10px] font-medium text-aqua tabular-nums">
-          ↑{delta} from #{yesterdayRank}
-        </span>
-      );
-    } else if (delta < 0) {
-      movement = (
-        <span className="text-[10px] font-medium text-red-400 tabular-nums">
-          ↓{Math.abs(delta)} from #{yesterdayRank}
-        </span>
-      );
-    } else {
-      movement = (
-        <span className="text-[10px] text-zinc-600 tabular-nums">
-          → #{yesterdayRank}
-        </span>
-      );
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 tabular-nums flex-wrap">
-      <span className="text-[12px] font-bold text-zinc-100">#{todayRank}</span>
-      {movement}
-    </div>
-  );
-}
-
-// ─── Sparkline card ──────────────────────────────────────────────────────────
-
-function Sparkline({
-  title,
-  data,
-  todayRank,
-  yesterdayRank,
-  color,
-}: {
-  title: string;
-  data: SparklineData[];
-  todayRank: number;
-  yesterdayRank: number | null;
-  color: string;
-}) {
-  return (
-    <div className="bg-[#111113] rounded-lg border border-zinc-800/60 p-3">
+  const cardBody = (
+    <div className="bg-[#111113] rounded-lg border border-zinc-800/60 p-3 h-full">
       <div style={{ height: 48 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart data={topic.data}>
             <Line
               type="monotone"
               dataKey="posts"
@@ -188,65 +66,93 @@ function Sparkline({
         </ResponsiveContainer>
       </div>
 
-      {/* Title row */}
-      <p className="text-[11px] text-zinc-400 leading-tight line-clamp-2 mt-1.5 mb-1">
-        {title}
-      </p>
+      <p className="text-[11px] text-zinc-400 leading-tight line-clamp-2 mt-1.5 mb-1">{topic.title}</p>
 
-      {/* Rank row */}
-      <RankBadge todayRank={todayRank} yesterdayRank={yesterdayRank} />
-    </div>
-  );
-}
-
-// ─── Row ─────────────────────────────────────────────────────────────────────
-
-function TopicRow({
-  label,
-  sparks,
-  color,
-}: {
-  label: string;
-  sparks: TopicSpark[];
-  color: string;
-}) {
-  if (sparks.length === 0) return null;
-
-  return (
-    <div>
-      <p className="text-xs text-zinc-600 mb-2">{label}</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-        {sparks.map(({ title, data, todayRank, yesterdayRank }) => (
-          <Sparkline
-            key={title}
-            title={title}
-            data={data}
-            todayRank={todayRank}
-            yesterdayRank={yesterdayRank}
-            color={color}
-          />
-        ))}
+      <div className="flex items-center gap-1.5 tabular-nums flex-wrap">
+        <span className="text-[10px] text-zinc-500">today {rankLabel(topic.todayRank)}</span>
+        <span className={`text-[10px] font-medium ${toneForState(topic.trendState)}`}>{ageLabel}</span>
+        <span className="text-[10px] text-zinc-500">yesterday {rankLabel(topic.yesterdayRank)}</span>
+        <span className="text-[10px] text-zinc-600">started {formatDate(topic.firstSeen)}</span>
       </div>
     </div>
   );
+
+  if (!topic.primaryUrl) return cardBody;
+
+  return (
+    <a
+      href={topic.primaryUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-aqua/60"
+      title="Open most relevant thread"
+    >
+      {cardBody}
+    </a>
+  );
 }
 
-// ─── Export ──────────────────────────────────────────────────────────────────
+function TopicRow({ label, items, color }: { label: string; items: TrendTopic[]; color: string }) {
+  return (
+    <div>
+      <p className="text-xs text-zinc-600 mb-2">{label}</p>
+      {items.length === 0 ? (
+        <div className="bg-[#111113] rounded-lg border border-zinc-800/60 p-4">
+          <p className="text-xs text-zinc-600">No topics in this list yet.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+          {items.map((topic, index) => (
+            <SparkCard key={`${label}-${topic.key}-${index}`} topic={topic} color={color} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategorySection({
+  heading,
+  newToday,
+  trendingOverall,
+  color,
+}: {
+  heading: string;
+  newToday: TrendTopic[];
+  trendingOverall: TrendTopic[];
+  color: string;
+}) {
+  if (newToday.length === 0 && trendingOverall.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-zinc-500">{heading}</p>
+      <TopicRow label="Top 5 New Today" items={newToday} color={color} />
+      <TopicRow label="Top 5 Trending Overall" items={trendingOverall} color={color} />
+    </div>
+  );
+}
 
 export function KeywordTrendGrid({ topics, todayDate }: Props) {
-  const ecosystemSparks = buildSparklines(topics, 'ecosystem', todayDate);
-  const enterpriseSparks = buildSparklines(topics, 'enterprise', todayDate);
+  const ecosystemAll = buildTrendTopics(topics, 'ecosystem', todayDate);
+  const enterpriseAll = buildTrendTopics(topics, 'enterprise', todayDate);
 
-  if (ecosystemSparks.length === 0 && enterpriseSparks.length === 0) {
+  const ecosystemNew = getNewTodayTop(ecosystemAll, TOP_N);
+  const enterpriseNew = getNewTodayTop(enterpriseAll, TOP_N);
+  const ecosystemTrending = getTrendingOverallTop(ecosystemAll, TOP_N);
+  const enterpriseTrending = getTrendingOverallTop(enterpriseAll, TOP_N);
+
+  if (
+    ecosystemNew.length === 0 &&
+    enterpriseNew.length === 0 &&
+    ecosystemTrending.length === 0 &&
+    enterpriseTrending.length === 0
+  ) {
     return (
       <div>
-        <p className="text-xs text-zinc-500 uppercase tracking-widest mb-4">
-          Topic Trends · Top 5 · 14 days
-        </p>
+        <p className="text-xs text-zinc-500 uppercase tracking-widest mb-4">Topic Trends - New Today vs Trending Overall - 14 days</p>
         <div className="bg-[#111113] rounded-lg border border-zinc-800/60 p-6 text-center">
-          <p className="text-sm text-zinc-600">
-            No topics yet — run the collector to populate.
-          </p>
+          <p className="text-sm text-zinc-600">No topics yet - run the collector to populate.</p>
         </div>
       </div>
     );
@@ -254,12 +160,10 @@ export function KeywordTrendGrid({ topics, todayDate }: Props) {
 
   return (
     <div>
-      <p className="text-xs text-zinc-500 uppercase tracking-widest mb-4">
-        Topic Trends · Top 5 · 14 days
-      </p>
+      <p className="text-xs text-zinc-500 uppercase tracking-widest mb-4">Topic Trends - New Today vs Trending Overall - 14 days</p>
       <div className="space-y-5">
-        <TopicRow label="🌐 Ecosystem" sparks={ecosystemSparks} color="#08CAA6" />
-        <TopicRow label="🏢 Enterprise AI" sparks={enterpriseSparks} color="#93D1BD" />
+        <CategorySection heading="Ecosystem" newToday={ecosystemNew} trendingOverall={ecosystemTrending} color="#08CAA6" />
+        <CategorySection heading="Enterprise AI" newToday={enterpriseNew} trendingOverall={enterpriseTrending} color="#93D1BD" />
       </div>
     </div>
   );

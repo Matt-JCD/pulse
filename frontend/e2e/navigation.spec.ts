@@ -30,7 +30,7 @@ test.describe('Sidebar navigation', () => {
       // All main nav labels present
       await expect(page.getByRole('link', { name: 'Intelligence' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Composer' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Admin$/ })).toBeVisible();
     }
   });
 

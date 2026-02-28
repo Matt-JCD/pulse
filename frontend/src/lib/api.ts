@@ -53,6 +53,7 @@ export interface EmergingTopic {
   date: string;
   platform: string;
   keyword: string;
+  topic_key?: string | null;
   topic_title: string;
   summary: string;
   post_count: number;
