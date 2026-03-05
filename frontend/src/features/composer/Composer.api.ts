@@ -6,8 +6,9 @@
 
 import type { ComposerPost, ComposerStats, EmergingTopic } from '@/lib/api';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '@/lib/apiUrl';
+
+const API_URL = getApiUrl();
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {

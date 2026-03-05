@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import type { ComposerPost } from '@/lib/api';
 import { ACCOUNTS, ACCOUNT_MAP } from '../types';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '@/lib/apiUrl';
+
+const API_URL = getApiUrl();
 
 interface Props {
   posts: ComposerPost[];

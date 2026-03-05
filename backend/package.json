@@ -21,10 +21,15 @@
     "express": "^5.1.0",
     "multer": "^2.1.0",
     "node-cron": "^4.2.1",
-    "oauth-1.0a": "^2.2.6"
+    "next": "16.1.6",
+    "oauth-1.0a": "^2.2.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@types/express": "^5.0.0",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.0.0",

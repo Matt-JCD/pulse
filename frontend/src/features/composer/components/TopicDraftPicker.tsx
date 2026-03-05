@@ -6,8 +6,9 @@ import type { EmergingTopic, MixResponse, DuplicateCheckResponse } from '@/lib/a
 import { api } from '@/lib/api';
 import { ACCOUNTS, ACCOUNT_MAP, CATEGORY_MAP, mapTopicToPostCategory } from '../types';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '@/lib/apiUrl';
+
+const API_URL = getApiUrl();
 
 interface Props {
   topics: EmergingTopic[];

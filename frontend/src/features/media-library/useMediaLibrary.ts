@@ -5,8 +5,9 @@ import { useState, useCallback } from 'react';
 import type { Episode, MediaAsset, AssetType } from '@/lib/api';
 import { api } from '@/lib/api';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '@/lib/apiUrl';
+
+const API_URL = getApiUrl();
 
 export function useMediaLibrary(initialEpisodes: Episode[]) {
   const router = useRouter();

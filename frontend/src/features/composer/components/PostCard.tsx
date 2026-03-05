@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ComposerPost, DuplicateCheckResponse } from '@/lib/api';
 import { api } from '@/lib/api';
+import { toSydneyDateTimeLocalValue, trySydneyLocalDateTimeToUtcIso } from '@/lib/sydneyDate';
 import { ACCOUNT_MAP } from '../types';
 
 interface Props {
@@ -55,14 +56,6 @@ function formatAESTFull(isoString: string | null): string {
   }
 }
 
-function toDateTimeLocalValue(isoString: string | null): string {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 export function PostCard({
   post,
   editingPostId,
@@ -83,7 +76,7 @@ export function PostCard({
 }: Props) {
   const [editContent, setEditContent] = useState(post.content);
   const [feedback, setFeedback] = useState('');
-  const [scheduleInput, setScheduleInput] = useState(toDateTimeLocalValue(post.scheduled_at));
+  const [scheduleInput, setScheduleInput] = useState(toSydneyDateTimeLocalValue(post.scheduled_at));
   const [dupCheck, setDupCheck] = useState<DuplicateCheckResponse | null>(null);
   const dupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isEditing = editingPostId === post.id;
@@ -111,6 +104,10 @@ export function PostCard({
 
     return () => { if (dupTimerRef.current) clearTimeout(dupTimerRef.current); };
   }, [editContent, isEditing, post.account, post.id]);
+
+  useEffect(() => {
+    setScheduleInput(toSydneyDateTimeLocalValue(post.scheduled_at));
+  }, [post.scheduled_at]);
 
   return (
     <div className="rounded-lg border border-zinc-800/60 bg-[#111113] p-5">
@@ -383,7 +380,8 @@ export function PostCard({
           <button
             onClick={() => {
               if (!scheduleInput) return;
-              const nextIso = new Date(scheduleInput).toISOString();
+              const nextIso = trySydneyLocalDateTimeToUtcIso(scheduleInput);
+              if (!nextIso) return;
               onEditSchedule(post.id, nextIso);
             }}
             disabled={isLoading || !scheduleInput}

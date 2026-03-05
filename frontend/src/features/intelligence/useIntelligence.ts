@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '@/lib/apiUrl';
+
+const API_URL = getApiUrl();
 
 const POLL_INTERVAL_MS = 12_000;  // check every 12 seconds
 const MAX_POLLS = 30;              // give up after ~6 minutes

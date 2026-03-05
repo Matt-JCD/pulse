@@ -1,0 +1,8 @@
+{
+  "name": "pulse",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm ci && npm run build && cd ../backend && npm ci && npm run build",
+    "start": "cd backend && node dist/index.js"
+  }
+}
