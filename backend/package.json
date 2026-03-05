@@ -16,26 +16,26 @@
     "@anthropic-ai/sdk": "^0.74.0",
     "@slack/web-api": "^7.14.1",
     "@supabase/supabase-js": "^2.49.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^5.1.0",
-    "multer": "^2.1.0",
-    "node-cron": "^4.2.1",
-    "next": "16.1.6",
-    "oauth-1.0a": "^2.2.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
-  },
-  "devDependencies": {
     "@types/cors": "^2.8.17",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "@types/express": "^5.0.0",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "multer": "^2.1.0",
+    "next": "16.1.6",
+    "node-cron": "^4.2.1",
+    "oauth-1.0a": "^2.2.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "typescript": "^5.7.0"
+  },
+  "devDependencies": {
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
     "vitest": "^3.2.4"
   }
 }
