@@ -8,7 +8,7 @@ import logging
 import time
 from typing import Optional
 
-from fastapi import FastAPI, Query, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Query, Request, Response
 from slack_sdk import WebClient
 
 from app import db
@@ -21,7 +21,7 @@ from app.config import (
     require_env_vars,
 )
 from app.pipeline import run_pipeline
-from app.pipeline_webhook import process_new_connections
+from app.pipeline_webhook import persist_new_connections, process_persisted_connections
 from app.slack_bot import handle_approve, handle_edit, handle_edit_submit, handle_skip
 from app.workflow import build_enrichment_from_row, get_slack_client, process_connection
 
@@ -92,7 +92,7 @@ async def trigger_run(dry_run: bool = Query(False)):
 
 
 @app.post("/webhook/new-connections")
-async def webhook_new_connections(request: Request):
+async def webhook_new_connections(request: Request, background_tasks: BackgroundTasks):
     """Receive new connections from the Chrome extension."""
     body = await request.json()
     connections = body.get("connections", [])
@@ -100,8 +100,15 @@ async def webhook_new_connections(request: Request):
         return {"status": "ok", "message": "No connections provided", "processed": 0}
 
     try:
-        result = await process_new_connections(connections)
-        return {"status": "ok", **result}
+        result = await persist_new_connections(connections)
+        if result["connection_ids"]:
+            background_tasks.add_task(process_persisted_connections, result["connection_ids"])
+        return {
+            "status": "accepted",
+            "accepted": result["accepted"],
+            "skipped": result["skipped"],
+            "errors": result["errors"],
+        }
     except Exception as e:
         logger.exception("Webhook processing failed")
         return {"status": "error", "error": str(e)}
