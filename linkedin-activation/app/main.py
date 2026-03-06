@@ -106,6 +106,13 @@ async def webhook_new_connections(request: Request):
         return {"status": "error", "error": str(e)}
 
 
+@app.get("/known-urns")
+async def known_urns():
+    """Return all URNs the backend already knows about (for extension first-run diff)."""
+    urns = await asyncio.to_thread(db.get_all_urns)
+    return list(urns)
+
+
 @app.post("/retry-enriched")
 async def retry_enriched(limit: int = Query(10, ge=1, le=50)):
     """Re-process connections stuck at 'enriched' (no draft). Drafts + posts to Slack."""

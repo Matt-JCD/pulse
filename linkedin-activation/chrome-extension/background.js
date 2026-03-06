@@ -1,7 +1,8 @@
 // LinkedIn Connection Detector — Background Service Worker
 // Runs hourly, fetches connections via Voyager API, POSTs new ones to webhook
 
-const WEBHOOK_URL = "https://pulse-by-prefactor-1.onrender.com/webhook/new-connections";
+const BACKEND_URL = "https://pulse-by-prefactor-1.onrender.com";
+const WEBHOOK_URL = `${BACKEND_URL}/webhook/new-connections`;
 const CHECK_INTERVAL_MINUTES = 60;
 const CONNECTIONS_PER_PAGE = 40;
 const MAX_PAGES = 5; // 200 connections max per check
@@ -209,7 +210,7 @@ async function checkPendingSends() {
 
   let pendingSends;
   try {
-    const resp = await fetch(`${WEBHOOK_URL.replace("/webhook/new-connections", "")}/pending-sends`);
+    const resp = await fetch(`${BACKEND_URL}/pending-sends`);
     if (!resp.ok) throw new Error(`${resp.status}`);
     pendingSends = await resp.json();
   } catch (err) {
@@ -233,7 +234,7 @@ async function checkPendingSends() {
 
       // Confirm send to backend
       const confirmResp = await fetch(
-        `${WEBHOOK_URL.replace("/webhook/new-connections", "")}/confirm-send/${item.id}`,
+        `${BACKEND_URL}/confirm-send/${item.id}`,
         { method: "POST", headers: { "Content-Type": "application/json" } }
       );
       if (!confirmResp.ok) {
@@ -298,13 +299,37 @@ async function checkForNewConnections() {
   const stored = await chrome.storage.local.get(STORAGE_KEY);
   const knownUrns = new Set(stored[STORAGE_KEY] || []);
 
-  // First run: seed the known list without sending anything
+  // First run: diff against backend DB instead of treating everything as new
   if (knownUrns.size === 0) {
-    console.log(`[LinkedIn Detector] First run — seeding ${allConnections.length} existing connections`);
+    console.log(`[LinkedIn Detector] First run — checking backend for known URNs...`);
+    let backendUrns = new Set();
+    try {
+      const resp = await fetch(`${BACKEND_URL}/known-urns`);
+      if (resp.ok) {
+        const urns = await resp.json();
+        backendUrns = new Set(urns);
+        console.log(`[LinkedIn Detector] Backend knows ${backendUrns.size} connections`);
+      }
+    } catch (err) {
+      console.warn("[LinkedIn Detector] Could not fetch backend URNs:", err);
+    }
+
+    // Store all current connections as known for future checks
     const allUrns = allConnections.map((c) => c.linkedin_urn);
     await chrome.storage.local.set({ [STORAGE_KEY]: allUrns });
-    await addLog("ok", `First run: seeded ${allConnections.length} existing connections`);
-    return { checked: allConnections.length, new: 0, seeded: true };
+
+    // Only process connections the backend doesn't know about yet
+    const newConnections = allConnections.filter((c) => !backendUrns.has(c.linkedin_urn));
+    if (newConnections.length === 0) {
+      await addLog("ok", `First run: seeded ${allConnections.length} connections, 0 new`);
+      return { checked: allConnections.length, new: 0, seeded: true };
+    }
+
+    console.log(`[LinkedIn Detector] First run: ${newConnections.length} connection(s) not in backend`);
+    await addLog("ok", `First run: ${newConnections.length} new of ${allConnections.length} total`);
+
+    // Enrich and send these new ones (falls through to enrichment below)
+    return await enrichAndSend(creds.csrf, newConnections, allConnections, knownUrns, startTime);
   }
 
   // Find new ones
@@ -317,13 +342,16 @@ async function checkForNewConnections() {
   }
 
   console.log(`[LinkedIn Detector] Found ${newConnections.length} new connection(s)!`);
+  return await enrichAndSend(creds.csrf, newConnections, allConnections, knownUrns, startTime);
+}
 
+async function enrichAndSend(csrf, newConnections, allConnections, knownUrns, startTime) {
   // Enrich each new connection with full profile + posts
   console.log("[LinkedIn Detector] Enriching new connections...");
   const enrichedConnections = [];
   for (const conn of newConnections) {
     try {
-      const enriched = await enrichConnection(creds.csrf, conn);
+      const enriched = await enrichConnection(csrf, conn);
       enrichedConnections.push(enriched);
       console.log(`[LinkedIn Detector] Enriched ${conn.first_name} ${conn.last_name} (${enriched.recent_posts.length} posts)`);
     } catch (err) {
