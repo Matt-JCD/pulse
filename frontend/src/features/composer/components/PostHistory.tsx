@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { ComposerPost } from '@/lib/api';
 import { ACCOUNTS, ACCOUNT_MAP } from '../types';
+import { useComposer } from '../useComposer';
 
 import { getApiUrl } from '@/lib/apiUrl';
 
@@ -48,6 +49,7 @@ export function PostHistory({ posts }: Props) {
   const [timeRange, setTimeRange] = useState<'today' | 'all'>('today');
   const [allTimePosts, setAllTimePosts] = useState<ComposerPost[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
+  const { handleRetry, isLoading } = useComposer();
 
   useEffect(() => {
     if (timeRange === 'all' && allTimePosts === null && !loadingAll) {
@@ -203,6 +205,15 @@ export function PostHistory({ posts }: Props) {
                 <p className="text-sm text-zinc-500 leading-relaxed line-clamp-2">
                   {post.content}
                 </p>
+                {post.status === 'failed' && (
+                  <button
+                    onClick={() => handleRetry(post.id)}
+                    disabled={isLoading}
+                    className="mt-2 rounded-md bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-700 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {isLoading ? 'Retrying...' : 'Retry — move back to drafts'}
+                  </button>
+                )}
               </div>
             );
           })}

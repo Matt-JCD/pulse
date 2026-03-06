@@ -94,6 +94,19 @@ export function useComposer() {
     }
   }
 
+  async function handleRetry(id: number) {
+    setIsLoading(true);
+    setActionError(null);
+    try {
+      await patch(`/api/composer/${id}/retry`);
+      router.refresh();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Retry failed');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function handleDelete(id: number) {
     setIsLoading(true);
     setActionError(null);
@@ -150,6 +163,7 @@ export function useComposer() {
     handleReject,
     handleRevise,
     handlePublishNow,
+    handleRetry,
     handleEdit,
     handleEditSchedule,
     handleDelete,

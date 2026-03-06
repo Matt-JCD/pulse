@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase } from '../db/supabase.js';
-import { draftPost, reviseDraft } from '../composer/drafting.js';
+import { draftPost, reviseDraft, autoDraftDailyPosts } from '../composer/drafting.js';
 import { publishPost } from '../composer/index.js';
 import { getDailyCount } from '../composer/counter.js';
 import { validatePost } from '../composer/ordering.js';
@@ -486,6 +486,31 @@ router.patch('/api/composer/:id/reject', async (req, res) => {
   res.json(data);
 });
 
+// ─── PATCH /api/composer/:id/retry ───────────────────────────────────────────
+// Moves a failed post back to 'draft' so it can be edited and re-published.
+router.patch('/api/composer/:id/retry', async (req, res) => {
+  const { id } = req.params;
+
+  const { data, error } = await supabase
+    .from('posts')
+    .update({
+      status: 'draft',
+      published_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', 'failed')
+    .select()
+    .single();
+
+  if (error) {
+    res.status(404).json({ error: 'Post not found or not in failed status.' });
+    return;
+  }
+
+  res.json(data);
+});
+
 // ─── PATCH /api/composer/:id/revise ──────────────────────────────────────────
 // Revises a draft with founder feedback. Original is rejected, new draft created.
 router.patch('/api/composer/:id/revise', async (req, res) => {
@@ -694,6 +719,15 @@ router.post('/api/composer/slack/action', async (req, res) => {
     console.error('[slack/action] Error handling action:', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'Internal error processing Slack action.' });
   }
+});
+
+// ─── POST /api/composer/auto-draft ────────────────────────────────────────────
+// Manual trigger for the daily auto-draft. Useful when the server missed the 6am cron.
+router.post('/api/composer/auto-draft', async (_req, res) => {
+  autoDraftDailyPosts().catch((err) =>
+    console.error('[composer] Manual auto-draft error:', err instanceof Error ? err.message : err),
+  );
+  res.json({ ok: true, message: 'Auto-draft started for all accounts.' });
 });
 
 export default router;

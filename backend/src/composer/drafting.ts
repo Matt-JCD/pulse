@@ -395,7 +395,7 @@ export async function autoDraftDailyPosts(): Promise<void> {
     // Draft for each account that has auto-draft enabled.
     // For now: prefactor_x gets the intelligence-driven auto-draft (was the original account).
     // Other accounts get manual drafting only until Phase 2.
-    const autoDraftAccounts: AccountSlug[] = ['prefactor_x'];
+    const autoDraftAccounts: AccountSlug[] = [...ACCOUNT_SLUGS];
 
     for (const account of autoDraftAccounts) {
       console.log(`[composer/drafting] Auto-drafting for ${account}...`);
