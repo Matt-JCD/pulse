@@ -29,5 +29,9 @@ def get_client(email: str = "", password: str = "", li_at: str = "", jsessionid:
 def get_my_urn(client: Linkedin) -> str:
     """Get the authenticated user's URN dynamically."""
     profile = client.get_user_profile()
+    print(f"[DEBUG] get_user_profile keys: {list(profile.keys())}", flush=True)
+    print(f"[DEBUG] get_user_profile full: {profile}", flush=True)
     mini = profile.get("miniProfile", profile)
-    return mini.get("entityUrn", mini.get("objectUrn", ""))
+    urn = mini.get("entityUrn", mini.get("objectUrn", ""))
+    print(f"[DEBUG] Resolved URN: {urn}", flush=True)
+    return urn
