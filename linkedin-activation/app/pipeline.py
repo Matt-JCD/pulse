@@ -7,7 +7,7 @@ import time
 from slack_sdk import WebClient
 
 from app.config import (
-    LI_EMAIL, LI_PASSWORD, LI_AT, ANTHROPIC_API_KEY, ATTIO_API_KEY,
+    LI_EMAIL, LI_PASSWORD, LI_AT, LI_JSESSIONID, ANTHROPIC_API_KEY, ATTIO_API_KEY,
     SLACK_BOT_TOKEN, SLACK_CHANNEL,
 )
 from app import db
@@ -29,7 +29,7 @@ async def run_pipeline(dry_run: bool = False) -> dict:
 
     # Authenticate with LinkedIn
     try:
-        li = get_client(LI_EMAIL, LI_PASSWORD, LI_AT)
+        li = get_client(LI_EMAIL, LI_PASSWORD, LI_AT, LI_JSESSIONID)
     except Exception as e:
         errors.append(f"LinkedIn auth failed: {e}")
         post_run_summary(0, errors, dry_run, slack, SLACK_CHANNEL)

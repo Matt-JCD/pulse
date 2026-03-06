@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response, Query
 from slack_sdk import WebClient
 
 from app.config import (
-    LI_EMAIL, LI_PASSWORD, LI_AT, ATTIO_API_KEY,
+    LI_EMAIL, LI_PASSWORD, LI_AT, LI_JSESSIONID, ATTIO_API_KEY,
     SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, SLACK_CHANNEL,
 )
 from app import db
@@ -104,7 +104,7 @@ async def slack_events(request: Request):
             connection_id = action["value"]
 
             if action_id == "approve_message":
-                li = get_client(LI_EMAIL, LI_PASSWORD, LI_AT)
+                li = get_client(LI_EMAIL, LI_PASSWORD, LI_AT, LI_JSESSIONID)
                 await handle_approve(connection_id, li, ATTIO_API_KEY, slack, SLACK_CHANNEL)
 
             elif action_id == "skip_message":
