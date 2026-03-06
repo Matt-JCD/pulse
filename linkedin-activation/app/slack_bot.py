@@ -113,12 +113,19 @@ def handle_approve(connection_id: str, slack: WebClient, channel: str):
     conn = db.get_connection(connection_id)
     db.set_status(connection_id, "pending_send")
 
-    if conn.get("slack_message_ts"):
-        slack.chat_update(
+    try:
+        if conn.get("slack_message_ts"):
+            slack.chat_update(
+                channel=channel,
+                ts=conn["slack_message_ts"],
+                text=f"Queued for send: {conn['first_name']} {conn['last_name']} — waiting for Chrome extension",
+                blocks=[],
+            )
+    except Exception:
+        # Non-fatal — the important part (pending_send status) is already set
+        slack.chat_postMessage(
             channel=channel,
-            ts=conn["slack_message_ts"],
             text=f"Queued for send: {conn['first_name']} {conn['last_name']} — waiting for Chrome extension",
-            blocks=[],
         )
 
 
