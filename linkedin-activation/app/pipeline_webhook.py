@@ -51,15 +51,24 @@ def _build_enrichment_from_webhook(conn: dict) -> dict:
 
 async def process_new_connections(connections: list[dict]) -> dict:
     """Process new connections from the Chrome extension webhook."""
-    require_env_vars("SLACK_BOT_TOKEN", "SLACK_CHANNEL", "ATTIO_API_KEY", "ANTHROPIC_API_KEY")
+    require_env_vars("SLACK_BOT_TOKEN", "SLACK_CHANNEL", "ANTHROPIC_API_KEY")
 
     errors: list[str] = []
     processed = 0
     slack = WebClient(token=SLACK_BOT_TOKEN)
 
-    # Dedupe against Supabase
+    # Dedupe within the batch first (extension can send duplicates across pages)
+    seen_urns: set[str] = set()
+    unique_connections: list[dict] = []
+    for c in connections:
+        urn = c.get("linkedin_urn", "")
+        if urn and urn not in seen_urns:
+            seen_urns.add(urn)
+            unique_connections.append(c)
+
+    # Then dedupe against Supabase
     known_urns = await asyncio.to_thread(db.get_all_urns)
-    new_connections = [c for c in connections if c.get("linkedin_urn") and c["linkedin_urn"] not in known_urns]
+    new_connections = [c for c in unique_connections if c["linkedin_urn"] not in known_urns]
 
     if not new_connections:
         logger.info("Webhook: all %d connections already known", len(connections))
@@ -70,17 +79,26 @@ async def process_new_connections(connections: list[dict]) -> dict:
     for conn in new_connections:
         name = f"{conn.get('first_name', '')} {conn.get('last_name', '')}".strip()
         try:
-            # Insert into Supabase
-            row = await asyncio.to_thread(db.insert_connection, conn)
+            # Insert into Supabase (upsert handles any remaining races)
+            row = await asyncio.to_thread(db.upsert_connection, conn)
             connection_id = row["id"]
+
+            # Skip if this connection was already processed (status beyond "new")
+            if row.get("status") not in (None, "new"):
+                logger.info("Skipping %s — already in status '%s'", name, row["status"])
+                continue
 
             # Build enrichment from what the extension gave us
             enrichment = _build_enrichment_from_webhook(conn)
             await asyncio.to_thread(db.set_status, connection_id, "enriched")
 
-            # Push to Attio
-            attio_id = await upsert_person(enrichment, ATTIO_API_KEY)
-            await asyncio.to_thread(db.set_attio_id, connection_id, attio_id)
+            # Push to Attio (non-fatal — continue if Attio fails)
+            if ATTIO_API_KEY:
+                try:
+                    attio_id = await upsert_person(enrichment, ATTIO_API_KEY)
+                    await asyncio.to_thread(db.set_attio_id, connection_id, attio_id)
+                except Exception as e:
+                    logger.warning("Attio upsert failed for %s: %s", name, e)
 
             # Draft message via Claude
             draft = await asyncio.wait_for(

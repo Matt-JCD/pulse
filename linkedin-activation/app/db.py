@@ -82,6 +82,36 @@ def insert_connection(conn: dict) -> dict:
     return resp.data[0]
 
 
+def upsert_connection(conn: dict) -> dict:
+    """Insert or return existing connection (safe against duplicates)."""
+    data = {
+        "linkedin_urn": conn["linkedin_urn"],
+        "public_identifier": conn.get("public_identifier"),
+        "first_name": conn.get("first_name"),
+        "last_name": conn.get("last_name"),
+        "headline": conn.get("headline"),
+        "status": "new",
+    }
+    resp = (
+        get_db()
+        .table(TABLE)
+        .upsert(data, on_conflict="linkedin_urn", ignore_duplicates=True)
+        .execute()
+    )
+    if resp.data:
+        return resp.data[0]
+    # Already existed — fetch it
+    existing = (
+        get_db()
+        .table(TABLE)
+        .select("*")
+        .eq("linkedin_urn", conn["linkedin_urn"])
+        .single()
+        .execute()
+    )
+    return existing.data
+
+
 def set_attio_id(connection_id: str, attio_id: str):
     get_db().table(TABLE).update({"attio_record_id": attio_id}).eq("id", connection_id).execute()
 
