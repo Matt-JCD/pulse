@@ -5,6 +5,9 @@ const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// In combined-server mode the Render URL is the same origin.
+const renderUrl = process.env.RENDER_EXTERNAL_URL; // Set automatically by Render
+
 function isAllowedDevOrigin(origin: string): boolean {
   return /^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin);
 }
@@ -17,7 +20,11 @@ export const corsMiddleware = cors({
       return;
     }
 
-    if (configuredOrigins.includes(origin) || isAllowedDevOrigin(origin)) {
+    if (
+      configuredOrigins.includes(origin) ||
+      isAllowedDevOrigin(origin) ||
+      (renderUrl && origin === renderUrl)
+    ) {
       callback(null, true);
       return;
     }
