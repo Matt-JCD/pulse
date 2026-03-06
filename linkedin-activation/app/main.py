@@ -55,6 +55,19 @@ async def health():
         return {"status": "ok", "db_error": str(e)}
 
 
+@app.get("/debug/auth")
+async def debug_auth():
+    """Check if LinkedIn cookies are loaded and valid."""
+    return {
+        "li_at_set": bool(LI_AT),
+        "li_at_length": len(LI_AT),
+        "li_at_prefix": LI_AT[:10] + "..." if LI_AT else "",
+        "jsessionid_set": bool(LI_JSESSIONID),
+        "jsessionid_length": len(LI_JSESSIONID),
+        "jsessionid_value": LI_JSESSIONID[:20] + "..." if LI_JSESSIONID else "",
+    }
+
+
 @app.get("/connections")
 async def list_connections(
     status: Optional[str] = Query(None),
