@@ -33,6 +33,9 @@ def _build_enrichment_from_webhook(conn: dict) -> dict:
     last_name, headline. We structure it like the LinkedIn enricher would
     so downstream code (Attio, drafter) works unchanged.
     """
+    # Extension now sends rich data: summary, location, industry, experience, recent_posts
+    experience = conn.get("experience", [])
+
     return {
         "profile": {
             "firstName": conn.get("first_name", ""),
@@ -40,12 +43,13 @@ def _build_enrichment_from_webhook(conn: dict) -> dict:
             "headline": conn.get("headline", ""),
             "publicIdentifier": conn.get("public_identifier", ""),
             "public_id": conn.get("public_identifier", ""),
-            "locationName": "",
-            "industryName": "",
-            "summary": "",
+            "locationName": conn.get("location", ""),
+            "industryName": conn.get("industry", ""),
+            "summary": conn.get("summary", ""),
+            "experience": experience,
         },
         "contact_info": {},
-        "recent_posts": [],
+        "recent_posts": [{"text": p} for p in conn.get("recent_posts", [])],
     }
 
 

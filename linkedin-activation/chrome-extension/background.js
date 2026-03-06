@@ -64,6 +64,94 @@ function parseConnections(apiResponse) {
   }).filter((c) => c.linkedin_urn);
 }
 
+// --- Profile Enrichment ---
+
+async function fetchFullProfile(csrf, publicIdentifier) {
+  const url = `https://www.linkedin.com/voyager/api/identity/profiles/${publicIdentifier}/profileView`;
+  const resp = await fetch(url, {
+    headers: {
+      "csrf-token": csrf,
+      "x-restli-protocol-version": "2.0.0",
+    },
+    credentials: "include",
+  });
+  if (!resp.ok) return null;
+  return resp.json();
+}
+
+async function fetchRecentPosts(csrf, urn) {
+  const url = new URL("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2");
+  url.searchParams.set("profileUrn", urn);
+  url.searchParams.set("q", "memberShareFeed");
+  url.searchParams.set("moduleKey", "member-shares:phone");
+  url.searchParams.set("count", "10");
+  url.searchParams.set("start", "0");
+
+  const resp = await fetch(url.toString(), {
+    headers: {
+      "csrf-token": csrf,
+      "x-restli-protocol-version": "2.0.0",
+    },
+    credentials: "include",
+  });
+  if (!resp.ok) return [];
+  const data = await resp.json();
+  return extractPostTexts(data);
+}
+
+function extractPostTexts(feedData) {
+  const posts = [];
+  for (const el of feedData.elements || []) {
+    const commentary =
+      el.commentary?.text?.text ||
+      el.value?.["com.linkedin.voyager.feed.render.UpdateV2"]?.commentary?.text?.text ||
+      "";
+    if (commentary) {
+      posts.push(commentary.slice(0, 500));
+    }
+    if (posts.length >= 5) break;
+  }
+  return posts;
+}
+
+function parseFullProfile(profileView) {
+  if (!profileView) return {};
+  const profile = profileView.profile || {};
+  const positionView = profileView.positionView || {};
+  const positions = positionView.elements || [];
+
+  const experience = positions.map((pos) => ({
+    title: pos.title || "",
+    companyName: pos.companyName || "",
+    description: (pos.description || "").slice(0, 300),
+  }));
+
+  return {
+    summary: (profile.summary || "").slice(0, 1000),
+    location: profile.locationName || profile.geoLocationName || "",
+    industry: profile.industryName || "",
+    experience: experience.slice(0, 3),
+  };
+}
+
+async function enrichConnection(csrf, conn) {
+  const [profileView, posts] = await Promise.all([
+    fetchFullProfile(csrf, conn.public_identifier).catch(() => null),
+    fetchRecentPosts(csrf, conn.linkedin_urn).catch(() => []),
+  ]);
+
+  const parsed = parseFullProfile(profileView);
+
+  return {
+    ...conn,
+    summary: parsed.summary || "",
+    location: parsed.location || "",
+    industry: parsed.industry || "",
+    experience: parsed.experience || [],
+    recent_posts: posts,
+  };
+}
+
 // --- Core Logic ---
 
 async function checkForNewConnections() {
@@ -114,12 +202,28 @@ async function checkForNewConnections() {
 
   console.log(`[LinkedIn Detector] Found ${newConnections.length} new connection(s)!`);
 
+  // Enrich each new connection with full profile + posts
+  console.log("[LinkedIn Detector] Enriching new connections...");
+  const enrichedConnections = [];
+  for (const conn of newConnections) {
+    try {
+      const enriched = await enrichConnection(creds.csrf, conn);
+      enrichedConnections.push(enriched);
+      console.log(`[LinkedIn Detector] Enriched ${conn.first_name} ${conn.last_name} (${enriched.recent_posts.length} posts)`);
+    } catch (err) {
+      console.warn(`[LinkedIn Detector] Enrichment failed for ${conn.first_name}, sending basic data`, err);
+      enrichedConnections.push(conn);
+    }
+    // Small delay between enrichment calls to be respectful
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+
   // POST to webhook
   try {
     const resp = await fetch(WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ connections: newConnections }),
+      body: JSON.stringify({ connections: enrichedConnections }),
     });
 
     if (!resp.ok) {
