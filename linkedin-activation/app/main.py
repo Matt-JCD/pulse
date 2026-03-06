@@ -12,19 +12,14 @@ from fastapi import FastAPI, Query, Request, Response
 from slack_sdk import WebClient
 
 from app import db
+from app.attio_sync import add_sent_note
 from app.config import (
     ATTIO_API_KEY,
-    LI_AT,
-    LI_EMAIL,
-    LI_JSESSIONID,
-    LI_PASSWORD,
     SLACK_BOT_TOKEN,
     SLACK_CHANNEL,
     SLACK_SIGNING_SECRET,
     require_env_vars,
-    require_linkedin_credentials,
 )
-from app.linkedin_client import get_client
 from app.pipeline import run_pipeline
 from app.pipeline_webhook import process_new_connections
 from app.slack_bot import handle_approve, handle_edit, handle_edit_submit, handle_skip
@@ -33,19 +28,15 @@ app = FastAPI(title="LinkedIn Activation Engine")
 logger = logging.getLogger(__name__)
 
 
-async def process_approve_action(connection_id: str) -> None:
+def process_approve_action(connection_id: str) -> None:
+    """Mark connection as pending_send for Chrome extension to pick up."""
     slack = WebClient(token=SLACK_BOT_TOKEN)
     try:
-        logger.info("Processing Slack approve action for connection %s", connection_id)
-        li = await asyncio.wait_for(
-            asyncio.to_thread(get_client, LI_EMAIL, LI_PASSWORD, LI_AT, LI_JSESSIONID),
-            timeout=60,
-        )
-        await handle_approve(connection_id, li, ATTIO_API_KEY, slack, SLACK_CHANNEL)
+        logger.info("Queuing send for connection %s", connection_id)
+        handle_approve(connection_id, slack, SLACK_CHANNEL)
     except Exception:
-        logger.exception("Slack approve action failed for connection %s", connection_id)
-        await asyncio.to_thread(
-            slack.chat_postMessage,
+        logger.exception("Approve action failed for connection %s", connection_id)
+        slack.chat_postMessage(
             channel=SLACK_CHANNEL,
             text=f"Approval failed for connection {connection_id}. Check Render logs.",
         )
@@ -79,22 +70,6 @@ async def health():
     except Exception as e:
         return {"status": "ok", "db_error": str(e)}
 
-
-@app.get("/debug/auth")
-async def debug_auth():
-    """Check which LinkedIn auth inputs are configured."""
-    return {
-        "email_set": bool(LI_EMAIL),
-        "email_prefix": LI_EMAIL[:3] + "..." if LI_EMAIL else "",
-        "password_set": bool(LI_PASSWORD),
-        "li_at_set": bool(LI_AT),
-        "li_at_length": len(LI_AT),
-        "li_at_prefix": LI_AT[:10] + "..." if LI_AT else "",
-        "jsessionid_set": bool(LI_JSESSIONID),
-        "jsessionid_length": len(LI_JSESSIONID),
-        "jsessionid_value": LI_JSESSIONID[:20] + "..." if LI_JSESSIONID else "",
-        "preferred_auth": "email_password" if LI_EMAIL and LI_PASSWORD else "none",
-    }
 
 
 @app.get("/connections")
@@ -131,6 +106,56 @@ async def webhook_new_connections(request: Request):
         return {"status": "error", "error": str(e)}
 
 
+@app.get("/pending-sends")
+async def pending_sends():
+    """Chrome extension polls this to find messages it needs to send."""
+    rows = await asyncio.to_thread(db.get_connections, "pending_send", 50)
+    return [
+        {
+            "id": r["id"],
+            "linkedin_urn": r["linkedin_urn"],
+            "public_identifier": r["public_identifier"],
+            "first_name": r["first_name"],
+            "last_name": r["last_name"],
+            "draft_message": r["draft_message"],
+        }
+        for r in rows
+    ]
+
+
+@app.post("/confirm-send/{connection_id}")
+async def confirm_send(connection_id: str):
+    """Chrome extension calls this after successfully sending a LinkedIn DM."""
+    conn = await asyncio.to_thread(db.get_connection, connection_id)
+    if not conn:
+        return {"status": "error", "error": "Connection not found"}
+
+    await asyncio.to_thread(db.set_status, connection_id, "sent")
+
+    # Log to Attio (non-fatal)
+    if ATTIO_API_KEY and conn.get("attio_record_id"):
+        try:
+            await add_sent_note(conn["attio_record_id"], conn["draft_message"], ATTIO_API_KEY)
+        except Exception as e:
+            logger.warning("Attio note failed for %s: %s", connection_id, e)
+
+    # Update Slack message
+    if conn.get("slack_message_ts"):
+        try:
+            slack = WebClient(token=SLACK_BOT_TOKEN)
+            await asyncio.to_thread(
+                slack.chat_update,
+                channel=SLACK_CHANNEL,
+                ts=conn["slack_message_ts"],
+                text=f"Sent to {conn['first_name']} {conn['last_name']}",
+                blocks=[],
+            )
+        except Exception as e:
+            logger.warning("Slack update failed for %s: %s", connection_id, e)
+
+    return {"status": "ok", "connection_id": connection_id}
+
+
 @app.post("/slack/events")
 async def slack_events(request: Request):
     try:
@@ -159,7 +184,9 @@ async def slack_events(request: Request):
                 connection_id = action["value"]
 
                 if action_id == "approve_message":
-                    asyncio.create_task(process_approve_action(connection_id))
+                    asyncio.create_task(
+                        asyncio.to_thread(process_approve_action, connection_id)
+                    )
 
                 elif action_id == "skip_message":
                     asyncio.create_task(

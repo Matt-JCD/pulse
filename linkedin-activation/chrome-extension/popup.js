@@ -1,6 +1,8 @@
 const checkBtn = document.getElementById("check-btn");
+const sendBtn = document.getElementById("send-btn");
 const resetBtn = document.getElementById("reset-btn");
 const knownCount = document.getElementById("known-count");
+const pendingCount = document.getElementById("pending-count");
 const nextCheck = document.getElementById("next-check");
 const resultDiv = document.getElementById("result");
 const logsDiv = document.getElementById("logs");
@@ -9,6 +11,7 @@ const logsDiv = document.getElementById("logs");
 loadStats();
 loadLogs();
 loadNextAlarm();
+loadPendingSends();
 
 checkBtn.addEventListener("click", async () => {
   checkBtn.disabled = true;
@@ -37,6 +40,35 @@ checkBtn.addEventListener("click", async () => {
 
   loadStats();
   loadLogs();
+});
+
+sendBtn.addEventListener("click", async () => {
+  sendBtn.disabled = true;
+  sendBtn.textContent = "Sending...";
+  resultDiv.style.display = "none";
+
+  const result = await chrome.runtime.sendMessage({ action: "send-now" });
+
+  sendBtn.disabled = false;
+  sendBtn.textContent = "Send Now";
+
+  resultDiv.style.display = "block";
+  if (result.error) {
+    resultDiv.style.background = "#2a1515";
+    resultDiv.style.color = "#e54d4d";
+    resultDiv.textContent = `Error: ${result.error}`;
+  } else if (result.sent > 0) {
+    resultDiv.style.background = "#0d2a24";
+    resultDiv.style.color = "#08CAA6";
+    resultDiv.textContent = `Sent ${result.sent} message(s)!${result.errors ? ` (${result.errors} failed)` : ""}`;
+  } else {
+    resultDiv.style.background = "#1a1a1a";
+    resultDiv.style.color = "#888";
+    resultDiv.textContent = "No pending messages to send.";
+  }
+
+  loadLogs();
+  loadPendingSends();
 });
 
 resetBtn.addEventListener("click", async () => {
@@ -75,6 +107,20 @@ async function loadLogs() {
       </div>`;
     })
     .join("");
+}
+
+async function loadPendingSends() {
+  try {
+    const resp = await fetch("https://pulse-by-prefactor-1.onrender.com/pending-sends");
+    if (resp.ok) {
+      const data = await resp.json();
+      pendingCount.textContent = data.length;
+    } else {
+      pendingCount.textContent = "?";
+    }
+  } catch {
+    pendingCount.textContent = "?";
+  }
 }
 
 async function loadNextAlarm() {

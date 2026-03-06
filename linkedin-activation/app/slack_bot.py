@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import asyncio
-
 from slack_sdk import WebClient
 
 from app import db
-from app.attio_sync import add_sent_note
-from app.sender import send_message as li_send_message
-
-BLOCKING_CALL_TIMEOUT = 60
 
 
 def build_approval_block(conn: dict) -> list:
@@ -114,24 +108,16 @@ def post_run_summary(new_count: int, errors: list[str], dry_run: bool, slack: We
     slack.chat_postMessage(channel=channel, text=text)
 
 
-async def handle_approve(connection_id: str, li_client, attio_key: str, slack: WebClient, channel: str):
-    """Send the LinkedIn message, log to Attio, update Slack."""
-    conn = await asyncio.to_thread(db.get_connection, connection_id)
-
-    await asyncio.wait_for(
-        asyncio.to_thread(li_send_message, li_client, conn["linkedin_urn"], conn["draft_message"]),
-        timeout=BLOCKING_CALL_TIMEOUT,
-    )
-    await asyncio.to_thread(db.set_status, connection_id, "sent")
-
-    await add_sent_note(conn["attio_record_id"], conn["draft_message"], attio_key)
+def handle_approve(connection_id: str, slack: WebClient, channel: str):
+    """Mark connection as pending_send — Chrome extension will pick it up and send via Voyager."""
+    conn = db.get_connection(connection_id)
+    db.set_status(connection_id, "pending_send")
 
     if conn.get("slack_message_ts"):
-        await asyncio.to_thread(
-            slack.chat_update,
+        slack.chat_update(
             channel=channel,
             ts=conn["slack_message_ts"],
-            text=f"Sent to {conn['first_name']} {conn['last_name']}",
+            text=f"Queued for send: {conn['first_name']} {conn['last_name']} — waiting for Chrome extension",
             blocks=[],
         )
 

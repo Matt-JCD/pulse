@@ -152,6 +152,113 @@ async function enrichConnection(csrf, conn) {
   };
 }
 
+// --- LinkedIn Messaging via Voyager ---
+
+async function sendLinkedInMessage(csrf, recipientUrn, messageBody) {
+  // Clean URN: ensure it's just the numeric ID for the messaging API
+  // e.g. "urn:li:fsd_profile:ACoAABxxxxxxx" → "ACoAABxxxxxxx"
+  const memberId = recipientUrn.includes(":") ? recipientUrn.split(":").pop() : recipientUrn;
+
+  const url = "https://www.linkedin.com/voyager/api/voyagerMessagingDashMessengerMessages?action=createMessage";
+
+  const payload = {
+    dedupeByClientGeneratedToken: false,
+    message: {
+      body: {
+        text: messageBody,
+      },
+      renderContentUnionType: "NONE",
+      originToken: crypto.randomUUID(),
+    },
+    mailboxUrn: "urn:li:fsd_profile:me",
+    trackingId: crypto.randomUUID(),
+    hostRecipientUrns: [`urn:li:fsd_profile:${memberId}`],
+  };
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "csrf-token": csrf,
+      "x-restli-protocol-version": "2.0.0",
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`LinkedIn messaging API ${resp.status}: ${text.slice(0, 200)}`);
+  }
+
+  return true;
+}
+
+// --- Pending Send Polling ---
+
+const SEND_POLL_INTERVAL_SECONDS = 30;
+
+async function checkPendingSends() {
+  console.log("[LinkedIn Detector] Checking for pending sends...");
+
+  const creds = await getLinkedInCookies();
+  if (!creds) {
+    console.log("[LinkedIn Detector] Not logged in — skipping send check");
+    return { error: "Not logged in" };
+  }
+
+  let pendingSends;
+  try {
+    const resp = await fetch(`${WEBHOOK_URL.replace("/webhook/new-connections", "")}/pending-sends`);
+    if (!resp.ok) throw new Error(`${resp.status}`);
+    pendingSends = await resp.json();
+  } catch (err) {
+    console.error("[LinkedIn Detector] Failed to fetch pending sends:", err);
+    return { error: err.message };
+  }
+
+  if (!pendingSends.length) {
+    return { pending: 0 };
+  }
+
+  console.log(`[LinkedIn Detector] ${pendingSends.length} message(s) to send`);
+  let sent = 0;
+  let errors = 0;
+
+  for (const item of pendingSends) {
+    const name = `${item.first_name} ${item.last_name}`;
+    try {
+      await sendLinkedInMessage(creds.csrf, item.linkedin_urn, item.draft_message);
+      console.log(`[LinkedIn Detector] Sent message to ${name}`);
+
+      // Confirm send to backend
+      const confirmResp = await fetch(
+        `${WEBHOOK_URL.replace("/webhook/new-connections", "")}/confirm-send/${item.id}`,
+        { method: "POST", headers: { "Content-Type": "application/json" } }
+      );
+      if (!confirmResp.ok) {
+        console.warn(`[LinkedIn Detector] Confirm failed for ${name}: ${confirmResp.status}`);
+      }
+
+      sent++;
+      // 3s delay between sends to avoid rate limiting
+      if (pendingSends.indexOf(item) < pendingSends.length - 1) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    } catch (err) {
+      console.error(`[LinkedIn Detector] Failed to send to ${name}:`, err);
+      errors++;
+      await addLog("error", `Send failed for ${name}: ${err.message}`);
+    }
+  }
+
+  if (sent > 0) {
+    await addLog("ok", `Sent ${sent} message(s)${errors ? `, ${errors} failed` : ""}`);
+  }
+
+  return { sent, errors };
+}
+
 // --- Core Logic ---
 
 async function checkForNewConnections() {
@@ -271,9 +378,18 @@ chrome.alarms.create("check-connections", {
   periodInMinutes: CHECK_INTERVAL_MINUTES,
 });
 
+// Poll for pending sends every 30 seconds (alarms minimum is 0.5 min)
+chrome.alarms.create("check-pending-sends", {
+  delayInMinutes: 0.5,
+  periodInMinutes: 0.5,
+});
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "check-connections") {
     checkForNewConnections();
+  }
+  if (alarm.name === "check-pending-sends") {
+    checkPendingSends();
   }
 });
 
@@ -294,6 +410,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.get(STORAGE_KEY).then((stored) => {
       sendResponse({ known: (stored[STORAGE_KEY] || []).length });
     });
+    return true;
+  }
+  if (msg.action === "send-now") {
+    checkPendingSends().then(sendResponse);
     return true;
   }
   if (msg.action === "reset") {
