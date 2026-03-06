@@ -12,8 +12,7 @@ const NAV_ITEMS = [
 ];
 
 const BOTTOM_ITEMS = [
-  { label: "Admin", href: "/admin", icon: "settings" },
-  { label: "Settings", href: "/settings", icon: "sliders" },
+  { label: "Settings", href: "/settings", icon: "settings" },
 ];
 
 // Simple SVG icons to avoid adding a dependency in Phase 1

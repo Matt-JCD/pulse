@@ -10,6 +10,8 @@ import healthRouter from './routes/health.js';
 import configRouter from './routes/admin/config.js';
 import keywordsRouter from './routes/admin/keywords.js';
 import testConnectionRouter from './routes/admin/testConnection.js';
+import connectionsRouter from './routes/admin/connections.js';
+import pipelineRouter from './routes/admin/pipeline.js';
 import intelligenceRouter from './routes/intelligence.js';
 import composerRouter from './routes/composer.js';
 import mediaRouter from './routes/media/index.js';
@@ -49,6 +51,8 @@ async function main(): Promise<void> {
   app.use(configRouter);
   app.use(keywordsRouter);
   app.use(testConnectionRouter);
+  app.use(connectionsRouter);
+  app.use(pipelineRouter);
   app.use(intelligenceRouter);
   app.use(composerRouter);
   app.use(mediaRouter);

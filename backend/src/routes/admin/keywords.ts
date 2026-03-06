@@ -29,9 +29,11 @@ router.post('/api/admin/keywords', async (req, res) => {
 
   const category = req.body.category === 'enterprise' ? 'enterprise' : 'ecosystem';
 
+  const platforms = Array.isArray(req.body.platforms) ? req.body.platforms : ['reddit', 'hn'];
+
   const { data, error } = await supabase
     .from('keywords')
-    .insert({ keyword: keyword.trim().toLowerCase(), active: true, category })
+    .insert({ keyword: keyword.trim().toLowerCase(), active: true, category, platforms })
     .select()
     .single();
 
@@ -68,9 +70,12 @@ router.put('/api/admin/keywords/:id', async (req, res) => {
   if ('category' in updates && (updates.category === 'ecosystem' || updates.category === 'enterprise')) {
     allowed.category = updates.category;
   }
+  if ('platforms' in updates && Array.isArray(updates.platforms)) {
+    allowed.platforms = updates.platforms;
+  }
 
   if (Object.keys(allowed).length === 0) {
-    res.status(400).json({ error: 'No valid fields to update (allowed: keyword, active, category)' });
+    res.status(400).json({ error: 'No valid fields to update (allowed: keyword, active, category, platforms)' });
     return;
   }
 
