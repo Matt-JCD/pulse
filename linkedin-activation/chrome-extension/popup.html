@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      padding: 16px;
+      margin: 0;
+      background: #0A0A0B;
+      color: #e0e0e0;
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 12px 0;
+      color: #08CAA6;
+    }
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #222;
+    }
+    .stat-label { color: #888; }
+    .stat-value { font-weight: 600; }
+    .buttons {
+      display: flex;
+      gap: 8px;
+      margin: 14px 0;
+    }
+    button {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    #check-btn {
+      background: #08CAA6;
+      color: #0A0A0B;
+    }
+    #check-btn:hover { background: #06b896; }
+    #check-btn:disabled { background: #333; color: #666; cursor: wait; }
+    #reset-btn {
+      background: #222;
+      color: #888;
+    }
+    #reset-btn:hover { background: #333; }
+    .log-section { margin-top: 12px; }
+    .log-title { color: #888; font-size: 11px; text-transform: uppercase; margin-bottom: 6px; }
+    .log-entry {
+      font-size: 11px;
+      padding: 4px 0;
+      border-bottom: 1px solid #1a1a1a;
+      display: flex;
+      gap: 6px;
+    }
+    .log-time { color: #555; white-space: nowrap; }
+    .log-ok { color: #08CAA6; }
+    .log-error { color: #e54d4d; }
+    .log-msg { color: #aaa; }
+    .empty { color: #555; text-align: center; padding: 20px 0; }
+  </style>
+</head>
+<body>
+  <h1>LinkedIn Connection Detector</h1>
+
+  <div class="stat">
+    <span class="stat-label">Known connections</span>
+    <span class="stat-value" id="known-count">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Next check</span>
+    <span class="stat-value" id="next-check">—</span>
+  </div>
+
+  <div class="buttons">
+    <button id="check-btn">Check Now</button>
+    <button id="reset-btn">Reset</button>
+  </div>
+
+  <div id="result" style="display:none; padding: 8px; border-radius: 6px; margin-bottom: 10px; font-size: 12px;"></div>
+
+  <div class="log-section">
+    <div class="log-title">Recent Activity</div>
+    <div id="logs"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

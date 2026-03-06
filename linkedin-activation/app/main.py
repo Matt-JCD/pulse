@@ -26,6 +26,7 @@ from app.config import (
 )
 from app.linkedin_client import get_client
 from app.pipeline import run_pipeline
+from app.pipeline_webhook import process_new_connections
 from app.slack_bot import handle_approve, handle_edit, handle_edit_submit, handle_skip
 
 app = FastAPI(title="LinkedIn Activation Engine")
@@ -111,6 +112,22 @@ async def trigger_run(dry_run: bool = Query(False)):
         result = await run_pipeline(dry_run=dry_run)
         return {"status": "completed", "dry_run": dry_run, **result}
     except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/webhook/new-connections")
+async def webhook_new_connections(request: Request):
+    """Receive new connections from the Chrome extension."""
+    body = await request.json()
+    connections = body.get("connections", [])
+    if not connections:
+        return {"status": "ok", "message": "No connections provided", "processed": 0}
+
+    try:
+        result = await process_new_connections(connections)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.exception("Webhook processing failed")
         return {"status": "error", "error": str(e)}
 
 

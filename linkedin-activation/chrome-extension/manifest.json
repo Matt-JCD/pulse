@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Connection Detector",
+  "version": "1.0.0",
+  "description": "Detects new LinkedIn connections and sends them to the activation pipeline",
+  "permissions": [
+    "storage",
+    "alarms",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://pulse-by-prefactor-1.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
