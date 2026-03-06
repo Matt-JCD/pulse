@@ -81,4 +81,6 @@ Rules:
             }
         ],
     )
-    return resp.content[0].text
+    text = resp.content[0].text.strip().replace("\n", " ")
+    text = " ".join(text.split())
+    return text[:200]

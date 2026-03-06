@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from supabase import create_client, Client
@@ -41,6 +40,13 @@ def get_connections(status: Optional[str] = None, limit: int = 50) -> list[dict]
     return q.execute().data
 
 
+def get_connections_by_statuses(statuses: list[str], limit: int = 50) -> list[dict]:
+    q = get_db().table(TABLE).select("*").order("detected_at", desc=True).limit(limit)
+    if statuses:
+        q = q.in_("status", statuses)
+    return q.execute().data
+
+
 def get_last_run_timestamp() -> Optional[str]:
     resp = (
         get_db()
@@ -77,6 +83,7 @@ def insert_connection(conn: dict) -> dict:
         "last_name": conn.get("last_name"),
         "headline": conn.get("headline"),
         "status": "new",
+        "last_error": None,
     }
     resp = get_db().table(TABLE).insert(data).execute()
     return resp.data[0]
@@ -91,6 +98,7 @@ def upsert_connection(conn: dict) -> dict:
         "last_name": conn.get("last_name"),
         "headline": conn.get("headline"),
         "status": "new",
+        "last_error": None,
     }
     resp = (
         get_db()
@@ -116,13 +124,40 @@ def set_attio_id(connection_id: str, attio_id: str):
     get_db().table(TABLE).update({"attio_record_id": attio_id}).eq("id", connection_id).execute()
 
 
-def set_draft(connection_id: str, message: str):
-    get_db().table(TABLE).update({"draft_message": message, "status": "drafted"}).eq("id", connection_id).execute()
+def set_enrichment(connection_id: str, enrichment: dict):
+    profile = enrichment.get("profile", {})
+    recent_posts = enrichment.get("recent_posts", [])
+    update = {
+        "summary": profile.get("summary", ""),
+        "location": profile.get("locationName", ""),
+        "industry": profile.get("industryName", ""),
+        "experience": profile.get("experience", []),
+        "recent_posts": recent_posts,
+        "last_error": None,
+    }
+    get_db().table(TABLE).update(update).eq("id", connection_id).execute()
 
 
-def set_slack_ts(connection_id: str, ts: str):
-    get_db().table(TABLE).update({"slack_message_ts": ts}).eq("id", connection_id).execute()
+def set_draft(connection_id: str, message: str, status: Optional[str] = None):
+    update = {"draft_message": message, "last_error": None}
+    if status:
+        update["status"] = status
+    get_db().table(TABLE).update(update).eq("id", connection_id).execute()
+
+
+def set_slack_ts(connection_id: str, ts: str, channel: Optional[str] = None, status: Optional[str] = None):
+    update = {"slack_message_ts": ts, "last_error": None}
+    if channel:
+        update["slack_channel"] = channel
+    if status:
+        update["status"] = status
+    get_db().table(TABLE).update(update).eq("id", connection_id).execute()
 
 
 def set_status(connection_id: str, status: str):
     get_db().table(TABLE).update({"status": status}).eq("id", connection_id).execute()
+
+
+def set_error(connection_id: str, status: str, message: str):
+    last_error = message[:1000] if message else None
+    get_db().table(TABLE).update({"status": status, "last_error": last_error}).eq("id", connection_id).execute()

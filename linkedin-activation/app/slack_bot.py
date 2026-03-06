@@ -29,7 +29,7 @@ def build_approval_block(conn: dict) -> list:
         {"type": "divider"},
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*Draft:*\n> {conn['draft_message']}"},
+            "text": {"type": "mrkdwn", "text": f"*Draft:*\n> {conn.get('draft_message', '')}"},
         },
         {
             "type": "actions",
@@ -96,9 +96,9 @@ def post_approval(conn: dict, slack: WebClient, channel: str) -> str:
 
 
 def post_run_summary(new_count: int, errors: list[str], dry_run: bool, slack: WebClient, channel: str):
-    """Always post after every run so failures are visible."""
+    """Post a summary after each run."""
     if errors:
-        text = "Pipeline run failed\n" + "\n".join(f"- {e}" for e in errors)
+        text = "Pipeline run finished with issues\n" + "\n".join(f"- {e}" for e in errors)
     elif new_count == 0:
         text = "Pipeline ran: no new connections"
     else:
@@ -109,30 +109,33 @@ def post_run_summary(new_count: int, errors: list[str], dry_run: bool, slack: We
 
 
 def handle_approve(connection_id: str, slack: WebClient, channel: str):
-    """Mark connection as pending_send — Chrome extension will pick it up and send via Voyager."""
+    """Mark connection as pending_send so the Chrome extension can send it."""
     conn = db.get_connection(connection_id)
-    db.set_status(connection_id, "pending_send")
+    if not conn:
+        raise RuntimeError(f"Connection {connection_id} not found")
+    db.set_error(connection_id, "pending_send", "")
 
     try:
         if conn.get("slack_message_ts"):
             slack.chat_update(
                 channel=channel,
                 ts=conn["slack_message_ts"],
-                text=f"Queued for send: {conn['first_name']} {conn['last_name']} — waiting for Chrome extension",
+                text=f"Queued for send: {conn['first_name']} {conn['last_name']} - waiting for Chrome extension",
                 blocks=[],
             )
     except Exception:
-        # Non-fatal — the important part (pending_send status) is already set
         slack.chat_postMessage(
             channel=channel,
-            text=f"Queued for send: {conn['first_name']} {conn['last_name']} — waiting for Chrome extension",
+            text=f"Queued for send: {conn['first_name']} {conn['last_name']} - waiting for Chrome extension",
         )
 
 
 def handle_skip(connection_id: str, slack: WebClient, channel: str):
     """Mark connection as skipped and update Slack."""
     conn = db.get_connection(connection_id)
-    db.set_status(connection_id, "skipped")
+    if not conn:
+        raise RuntimeError(f"Connection {connection_id} not found")
+    db.set_error(connection_id, "skipped", "")
 
     if conn.get("slack_message_ts"):
         slack.chat_update(
@@ -146,14 +149,18 @@ def handle_skip(connection_id: str, slack: WebClient, channel: str):
 def handle_edit(connection_id: str, trigger_id: str, slack: WebClient):
     """Open the edit modal in Slack."""
     conn = db.get_connection(connection_id)
+    if not conn:
+        raise RuntimeError(f"Connection {connection_id} not found")
     modal = build_edit_modal(connection_id, conn.get("draft_message", ""))
     slack.views_open(trigger_id=trigger_id, view=modal)
 
 
 def handle_edit_submit(connection_id: str, new_draft: str, slack: WebClient, channel: str):
-    """Save edited draft and re-post the approval card."""
+    """Save edited draft and keep the item in review."""
     db.set_draft(connection_id, new_draft)
     conn = db.get_connection(connection_id)
+    if not conn:
+        raise RuntimeError(f"Connection {connection_id} not found")
 
     if conn.get("slack_message_ts"):
         slack.chat_update(
@@ -162,3 +169,4 @@ def handle_edit_submit(connection_id: str, new_draft: str, slack: WebClient, cha
             blocks=build_approval_block(conn),
             text=f"Updated draft for {conn['first_name']} {conn['last_name']}",
         )
+        db.set_error(connection_id, "awaiting_review", "")

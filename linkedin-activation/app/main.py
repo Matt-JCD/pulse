@@ -23,6 +23,7 @@ from app.config import (
 from app.pipeline import run_pipeline
 from app.pipeline_webhook import process_new_connections
 from app.slack_bot import handle_approve, handle_edit, handle_edit_submit, handle_skip
+from app.workflow import build_enrichment_from_row, get_slack_client, process_connection
 
 app = FastAPI(title="LinkedIn Activation Engine")
 logger = logging.getLogger(__name__)
@@ -115,48 +116,30 @@ async def known_urns():
 
 @app.post("/retry-enriched")
 async def retry_enriched(limit: int = Query(10, ge=1, le=50)):
-    """Re-process connections stuck at 'enriched' (no draft). Drafts + posts to Slack."""
-    from app.config import ANTHROPIC_API_KEY, SLACK_BOT_TOKEN, SLACK_CHANNEL
-    from app.drafter import draft_message
-    from app.slack_bot import post_approval
-
-    rows = await asyncio.to_thread(db.get_connections, "enriched", limit)
+    """Retry connections that reached enrichment/draft but never made it to review."""
+    rows = await asyncio.to_thread(
+        db.get_connections_by_statuses,
+        ["enriched", "drafted", "slack_failed"],
+        limit,
+    )
     if not rows:
-        return {"status": "ok", "message": "No enriched connections to retry", "processed": 0}
+        return {"status": "ok", "message": "No retryable connections found", "processed": 0}
 
-    slack = WebClient(token=SLACK_BOT_TOKEN)
+    slack, slack_channel, slack_error = get_slack_client()
     processed = 0
-    errors = []
+    errors = [slack_error] if slack_error else []
 
     for row in rows:
         name = f"{row['first_name']} {row['last_name']}"
         try:
-            # Build minimal enrichment from DB fields
-            enrichment = {
-                "profile": {
-                    "firstName": row.get("first_name", ""),
-                    "lastName": row.get("last_name", ""),
-                    "headline": row.get("headline", ""),
-                    "publicIdentifier": row.get("public_identifier", ""),
-                    "locationName": "",
-                    "industryName": "",
-                    "summary": "",
-                    "experience": [],
-                },
-                "contact_info": {},
-                "recent_posts": [],
-            }
-
-            draft = await asyncio.wait_for(
-                asyncio.to_thread(draft_message, enrichment, ANTHROPIC_API_KEY),
-                timeout=60,
+            enrichment = build_enrichment_from_row(row)
+            await process_connection(
+                row,
+                enrichment,
+                slack=slack,
+                slack_channel=slack_channel,
+                allow_retry=True,
             )
-            await asyncio.to_thread(db.set_draft, row["id"], draft)
-
-            conn = await asyncio.to_thread(db.get_connection, row["id"])
-            ts = await asyncio.to_thread(post_approval, conn, slack, SLACK_CHANNEL)
-            await asyncio.to_thread(db.set_slack_ts, row["id"], ts)
-
             processed += 1
         except Exception as e:
             logger.exception("Retry failed for %s", name)
@@ -220,6 +203,16 @@ async def slack_events(request: Request):
     try:
         require_env_vars("SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN", "SLACK_CHANNEL")
 
+        if request.headers.get("content-type", "").startswith("application/json"):
+            payload = await request.json()
+            if payload.get("type") == "url_verification":
+                return Response(
+                    status_code=200,
+                    media_type="application/json",
+                    content=json.dumps({"challenge": payload.get("challenge", "")}),
+                )
+            return Response(status_code=400, content="Unsupported Slack JSON payload")
+
         body = await request.body()
         timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
         signature = request.headers.get("X-Slack-Signature", "")
@@ -227,7 +220,6 @@ async def slack_events(request: Request):
         if not verify_slack_signature(body, timestamp, signature):
             return Response(status_code=401, content="Invalid signature")
 
-        # Parse form payload from the raw body (don't call request.form() after request.body())
         from urllib.parse import parse_qs
 
         parsed = parse_qs(body.decode("utf-8"))
@@ -268,4 +260,4 @@ async def slack_events(request: Request):
         return Response(status_code=200)
     except Exception:
         logger.exception("Slack events handler crashed")
-        return Response(status_code=200)
+        return Response(status_code=500, content="Slack events handler crashed")
