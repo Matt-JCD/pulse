@@ -5,7 +5,6 @@ import hashlib
 import hmac
 import json
 import time
-from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, Request, Response, Query
@@ -21,14 +20,7 @@ from app.slack_bot import handle_approve, handle_skip, handle_edit, handle_edit_
 from app.pipeline import run_pipeline
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Auto-create table on startup."""
-    db.ensure_table()
-    yield
-
-
-app = FastAPI(title="LinkedIn Activation Engine", lifespan=lifespan)
+app = FastAPI(title="LinkedIn Activation Engine")
 
 
 # ---------------------------------------------------------------------------

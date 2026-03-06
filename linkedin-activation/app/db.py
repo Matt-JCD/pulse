@@ -19,28 +19,6 @@ def get_db() -> Client:
     return _client
 
 
-def ensure_table():
-    """Create the linkedin_connections table if it doesn't exist."""
-    sql = """
-    CREATE TABLE IF NOT EXISTS linkedin_connections (
-        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-        linkedin_urn TEXT UNIQUE NOT NULL,
-        public_identifier TEXT,
-        first_name TEXT,
-        last_name TEXT,
-        headline TEXT,
-        attio_record_id TEXT,
-        status TEXT DEFAULT 'new',
-        draft_message TEXT,
-        slack_message_ts TEXT,
-        detected_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_connections_urn ON linkedin_connections(linkedin_urn);
-    CREATE INDEX IF NOT EXISTS idx_connections_status ON linkedin_connections(status);
-    """
-    get_db().rpc("exec_sql", {"query": sql}).execute()
-
-
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
