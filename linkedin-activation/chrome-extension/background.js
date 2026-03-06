@@ -295,45 +295,26 @@ async function checkForNewConnections() {
 
   console.log(`[LinkedIn Detector] Fetched ${allConnections.length} connections`);
 
-  // Load known connections from storage
-  const stored = await chrome.storage.local.get(STORAGE_KEY);
-  const knownUrns = new Set(stored[STORAGE_KEY] || []);
-
-  // First run: diff against backend DB instead of treating everything as new
-  if (knownUrns.size === 0) {
-    console.log(`[LinkedIn Detector] First run — checking backend for known URNs...`);
-    let backendUrns = new Set();
-    try {
-      const resp = await fetch(`${BACKEND_URL}/known-urns`);
-      if (resp.ok) {
-        const urns = await resp.json();
-        backendUrns = new Set(urns);
-        console.log(`[LinkedIn Detector] Backend knows ${backendUrns.size} connections`);
-      }
-    } catch (err) {
-      console.warn("[LinkedIn Detector] Could not fetch backend URNs:", err);
-    }
-
-    // Store all current connections as known for future checks
-    const allUrns = allConnections.map((c) => c.linkedin_urn);
-    await chrome.storage.local.set({ [STORAGE_KEY]: allUrns });
-
-    // Only process connections the backend doesn't know about yet
-    const newConnections = allConnections.filter((c) => !backendUrns.has(c.linkedin_urn));
-    if (newConnections.length === 0) {
-      await addLog("ok", `First run: seeded ${allConnections.length} connections, 0 new`);
-      return { checked: allConnections.length, new: 0, seeded: true };
-    }
-
-    console.log(`[LinkedIn Detector] First run: ${newConnections.length} connection(s) not in backend`);
-    await addLog("ok", `First run: ${newConnections.length} new of ${allConnections.length} total`);
-
-    // Enrich and send these new ones (falls through to enrichment below)
-    return await enrichAndSend(creds.csrf, newConnections, allConnections, knownUrns, startTime);
+  // Always diff against the backend (source of truth) — no local storage guessing
+  let backendUrns;
+  try {
+    const resp = await fetch(`${BACKEND_URL}/known-urns`);
+    if (!resp.ok) throw new Error(`${resp.status}`);
+    const urns = await resp.json();
+    backendUrns = new Set(urns);
+    console.log(`[LinkedIn Detector] Backend knows ${backendUrns.size} connections`);
+  } catch (err) {
+    console.error("[LinkedIn Detector] Cannot reach backend — aborting check:", err);
+    await addLog("error", `Backend unreachable: ${err.message}`);
+    return { error: `Backend unreachable: ${err.message}` };
   }
 
-  // Find new ones
-  const newConnections = allConnections.filter((c) => !knownUrns.has(c.linkedin_urn));
+  // Update local storage for popup stats display
+  const allUrns = allConnections.map((c) => c.linkedin_urn);
+  await chrome.storage.local.set({ [STORAGE_KEY]: allUrns });
+
+  // Find connections LinkedIn knows about but backend doesn't
+  const newConnections = allConnections.filter((c) => !backendUrns.has(c.linkedin_urn));
 
   if (newConnections.length === 0) {
     console.log("[LinkedIn Detector] No new connections");
@@ -342,7 +323,7 @@ async function checkForNewConnections() {
   }
 
   console.log(`[LinkedIn Detector] Found ${newConnections.length} new connection(s)!`);
-  return await enrichAndSend(creds.csrf, newConnections, allConnections, knownUrns, startTime);
+  return await enrichAndSend(creds.csrf, newConnections, allConnections, new Set(allUrns), startTime);
 }
 
 async function enrichAndSend(csrf, newConnections, allConnections, knownUrns, startTime) {
