@@ -12,7 +12,7 @@ def get_recent_connections(client: Linkedin) -> list[dict]:
     Sorted by recency — only care about new ones since last run.
     """
     my_urn = get_my_urn(client)
-    return client.get_profile_connections(urn_id=my_urn, results=100)
+    return client.get_profile_connections(urn_id=my_urn)
 
 
 def find_new_connections(connections: list[dict]) -> list[dict]:
