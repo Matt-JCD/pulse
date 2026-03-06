@@ -9,6 +9,8 @@ const MAX_NEW_CONNECTIONS_PER_CHECK = 20;
 const STORAGE_KEY = "known_connections";
 const LOG_KEY = "check_log";
 const VIEWER_URN_KEY = "viewer_profile_urn";
+const BASELINE_KEY = "connection_baseline_initialized";
+const BASELINE_AT_KEY = "connection_baseline_seeded_at";
 
 async function getLinkedInCookies() {
   const cookies = await chrome.cookies.getAll({ domain: ".linkedin.com" });
@@ -270,6 +272,10 @@ async function checkForNewConnections() {
     return { error: `Backend unreachable: ${err.message}` };
   }
 
+  const stored = await chrome.storage.local.get([STORAGE_KEY, BASELINE_KEY]);
+  const knownLocalUrns = new Set(stored[STORAGE_KEY] || []);
+  const baselineInitialized = Boolean(stored[BASELINE_KEY]);
+
   const allConnections = [];
   const newConnections = [];
   const seenUrns = new Set();
@@ -285,11 +291,15 @@ async function checkForNewConnections() {
 
       allConnections.push(...parsed);
 
-      const pageNewConnections = parsed.filter((conn) => !backendUrns.has(conn.linkedin_urn));
+      const pageNewConnections = baselineInitialized
+        ? parsed.filter(
+            (conn) => !knownLocalUrns.has(conn.linkedin_urn) && !backendUrns.has(conn.linkedin_urn)
+          )
+        : [];
       newConnections.push(...pageNewConnections);
 
       if (parsed.length < CONNECTIONS_PER_PAGE) break;
-      if (page > 0 && pageNewConnections.length === 0) break;
+      if (baselineInitialized && page > 0 && pageNewConnections.length === 0) break;
       if (newConnections.length >= MAX_NEW_CONNECTIONS_PER_CHECK) {
         newConnections.length = MAX_NEW_CONNECTIONS_PER_CHECK;
         break;
@@ -307,6 +317,20 @@ async function checkForNewConnections() {
   await chrome.storage.local.set({
     [STORAGE_KEY]: allConnections.map((conn) => conn.linkedin_urn),
   });
+
+  if (!baselineInitialized) {
+    const seededAt = new Date().toISOString();
+    await chrome.storage.local.set({
+      [BASELINE_KEY]: true,
+      [BASELINE_AT_KEY]: seededAt,
+    });
+    await addLog("ok", `Seeded baseline with ${allConnections.length} recent connections`);
+    return {
+      checked: allConnections.length,
+      new: 0,
+      seeded: true,
+    };
+  }
 
   if (!newConnections.length) {
     await addLog("ok", `Checked ${allConnections.length} connections, 0 new`);
@@ -392,7 +416,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.action === "reset") {
-    chrome.storage.local.remove([STORAGE_KEY, LOG_KEY, VIEWER_URN_KEY]).then(() => {
+    chrome.storage.local
+      .remove([STORAGE_KEY, LOG_KEY, VIEWER_URN_KEY, BASELINE_KEY, BASELINE_AT_KEY])
+      .then(() => {
       sendResponse({ ok: true });
     });
     return true;
