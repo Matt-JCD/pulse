@@ -213,7 +213,7 @@ async def sync_connections_to_attio(
 @app.post("/slack/events")
 async def slack_events(request: Request):
     try:
-        require_env_vars("SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN", "SLACK_CHANNEL")
+        require_env_vars("SLACK_SIGNING_SECRET", "SLACK_BOT_TOKEN")
 
         if request.headers.get("content-type", "").startswith("application/json"):
             payload = await request.json()
