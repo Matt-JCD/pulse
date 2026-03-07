@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import logging
 
-import anthropic
+from openai import OpenAI
 from supabase import Client
 
 from app import db
-from app.config import ANTHROPIC_API_KEY
+from app.config import OPENAI_API_KEY
 from app.state_machine import transition_status
 
 logger = logging.getLogger(__name__)
+OPENAI_MODEL = "gpt-4.1"
 
 SYSTEM = """You are drafting LinkedIn connection messages as Matt Doughty, CEO of Prefactor.
 Australian-based (English background), direct, no-bullshit, hates corporate speak.
@@ -34,8 +35,8 @@ specific to reference, say something provocative about their industry + AI."""
 
 
 def draft_message(enrichment: dict, api_key: str) -> str:
-    """Draft a personalised LinkedIn message using Claude."""
-    client = anthropic.Anthropic(api_key=api_key)
+    """Draft a personalised LinkedIn message using OpenAI."""
+    client = OpenAI(api_key=api_key)
     profile = enrichment["profile"]
     posts = enrichment.get("recent_posts", [])
 
@@ -65,14 +66,7 @@ def draft_message(enrichment: dict, api_key: str) -> str:
             if text:
                 context_parts.append(f"Post {i}: {text}")
 
-    resp = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=600,
-        system=SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": f"""Draft a LinkedIn message for this new connection.
+    user_prompt = f"""Draft a LinkedIn message for this new connection.
 
 PROFILE:
 {chr(10).join(context_parts)}
@@ -86,11 +80,16 @@ Rules:
 - Tone: direct, warm, curious. Like a text from a friend who happens to be a founder
 - End with a specific question or a sharp observation, never "let me know if..."
 - Output ONLY the message text, nothing else. No quotes, no explanation.
-""",
-            }
+"""
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        max_tokens=600,
+        messages=[
+            {"role": "developer", "content": SYSTEM},
+            {"role": "user", "content": user_prompt},
         ],
     )
-    text = resp.content[0].text.strip().replace("\n", " ")
+    text = (resp.choices[0].message.content or "").strip().replace("\n", " ")
     text = " ".join(text.split())
     return text
 
@@ -149,7 +148,7 @@ Rules:
 
 def generate_outreach_draft(outreach_row: dict) -> str:
     """Generate a personalised welcome message using enriched profile data."""
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = OpenAI(api_key=OPENAI_API_KEY)
     full_name = outreach_row.get("full_name") or "Unknown"
     first_name = outreach_row.get("first_name") or full_name.split(" ")[0]
     headline = outreach_row.get("headline") or "N/A"
@@ -192,14 +191,7 @@ def generate_outreach_draft(outreach_row: dict) -> str:
             if text:
                 context_parts.append(f"Post {i}: {text}")
 
-    resp = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=600,
-        system=OUTREACH_SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": f"""Write a post-connection LinkedIn message for this person.
+    user_prompt = f"""Write a post-connection LinkedIn message for this person.
 
 PROFILE:
 {chr(10).join(context_parts)}
@@ -215,11 +207,16 @@ Rules:
 - End with "Matt"
 - Keep the message concise and natural
 - Output only the final message
-""",
-            }
+"""
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        max_tokens=600,
+        messages=[
+            {"role": "developer", "content": OUTREACH_SYSTEM},
+            {"role": "user", "content": user_prompt},
         ],
     )
-    text = resp.content[0].text.strip().replace("\n", " ")
+    text = (resp.choices[0].message.content or "").strip().replace("\n", " ")
     text = " ".join(text.split())
     return text
 

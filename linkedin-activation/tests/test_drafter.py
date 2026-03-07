@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -58,11 +58,13 @@ def _build_supabase_mock(select_results: list[dict]) -> MagicMock:
     return mock_supabase
 
 
-def _mock_anthropic_response(text: str) -> MagicMock:
-    content_block = MagicMock()
-    content_block.text = text
+def _mock_openai_response(text: str) -> MagicMock:
+    message = MagicMock()
+    message.content = text
+    choice = MagicMock()
+    choice.message = message
     resp = MagicMock()
-    resp.content = [content_block]
+    resp.choices = [choice]
     return resp
 
 
@@ -71,12 +73,12 @@ def _mock_anthropic_response(text: str) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 class TestGenerateOutreachDraft:
-    @patch("app.drafter.ANTHROPIC_API_KEY", "test-key")
-    @patch("app.drafter.anthropic.Anthropic")
+    @patch("app.drafter.OPENAI_API_KEY", "test-key")
+    @patch("app.drafter.OpenAI")
     def test_returns_draft_text(self, mock_cls):
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response(
+        mock_client.chat.completions.create.return_value = _mock_openai_response(
             "Great to connect, Jane! Your work at Acme sounds fascinating."
         )
 
@@ -84,52 +86,52 @@ class TestGenerateOutreachDraft:
 
         assert result == "Great to connect, Jane! Your work at Acme sounds fascinating."
 
-    @patch("app.drafter.ANTHROPIC_API_KEY", "test-key")
-    @patch("app.drafter.anthropic.Anthropic")
+    @patch("app.drafter.OPENAI_API_KEY", "test-key")
+    @patch("app.drafter.OpenAI")
     def test_prompt_includes_full_name_and_headline(self, mock_cls):
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response("Hi!")
+        mock_client.chat.completions.create.return_value = _mock_openai_response("Hi!")
 
         generate_outreach_draft(SAMPLE_ROW)
 
-        create_call = mock_client.messages.create.call_args
-        user_message = create_call.kwargs["messages"][0]["content"]
+        create_call = mock_client.chat.completions.create.call_args
+        user_message = create_call.kwargs["messages"][1]["content"]
         assert "Jane Smith" in user_message
         assert "VP Engineering @ Acme Corp" in user_message
 
-    @patch("app.drafter.ANTHROPIC_API_KEY", "test-key")
-    @patch("app.drafter.anthropic.Anthropic")
-    def test_uses_sonnet_model(self, mock_cls):
+    @patch("app.drafter.OPENAI_API_KEY", "test-key")
+    @patch("app.drafter.OpenAI")
+    def test_uses_openai_model(self, mock_cls):
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response("Hi!")
+        mock_client.chat.completions.create.return_value = _mock_openai_response("Hi!")
 
         generate_outreach_draft(SAMPLE_ROW)
 
-        create_call = mock_client.messages.create.call_args
-        assert create_call.kwargs["model"] == "claude-sonnet-4-20250514"
+        create_call = mock_client.chat.completions.create.call_args
+        assert create_call.kwargs["model"] == "gpt-4.1"
         assert create_call.kwargs["max_tokens"] == 600
 
-    @patch("app.drafter.ANTHROPIC_API_KEY", "test-key")
-    @patch("app.drafter.anthropic.Anthropic")
+    @patch("app.drafter.OPENAI_API_KEY", "test-key")
+    @patch("app.drafter.OpenAI")
     def test_null_headline_shows_na(self, mock_cls):
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response("Hi!")
+        mock_client.chat.completions.create.return_value = _mock_openai_response("Hi!")
 
         generate_outreach_draft(SAMPLE_ROW_NO_HEADLINE)
 
-        create_call = mock_client.messages.create.call_args
-        user_message = create_call.kwargs["messages"][0]["content"]
+        create_call = mock_client.chat.completions.create.call_args
+        user_message = create_call.kwargs["messages"][1]["content"]
         assert "Headline: N/A" in user_message
 
-    @patch("app.drafter.ANTHROPIC_API_KEY", "test-key")
-    @patch("app.drafter.anthropic.Anthropic")
+    @patch("app.drafter.OPENAI_API_KEY", "test-key")
+    @patch("app.drafter.OpenAI")
     def test_does_not_truncate_output(self, mock_cls):
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
-        mock_client.messages.create.return_value = _mock_anthropic_response("x" * 500)
+        mock_client.chat.completions.create.return_value = _mock_openai_response("x" * 500)
 
         result = generate_outreach_draft(SAMPLE_ROW)
 

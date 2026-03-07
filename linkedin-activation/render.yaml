@@ -11,7 +11,7 @@ services:
         sync: false
       - key: LI_PASSWORD
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
       - key: ATTIO_API_KEY
         sync: false
