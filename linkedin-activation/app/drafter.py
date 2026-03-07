@@ -67,7 +67,7 @@ def draft_message(enrichment: dict, api_key: str) -> str:
 
     resp = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=400,
+        max_tokens=600,
         system=SYSTEM,
         messages=[
             {
@@ -92,47 +92,39 @@ Rules:
     )
     text = resp.content[0].text.strip().replace("\n", " ")
     text = " ".join(text.split())
-    return text[:200]
+    return text[:400]
 
 
 # ---------------------------------------------------------------------------
 # Outreach drafting (linkedin_outreach table)
 # ---------------------------------------------------------------------------
 
-OUTREACH_SYSTEM = """The Strategic Peer Prompt
+OUTREACH_SYSTEM = """The Final Matt Activation Logic
 
-Persona: Matt Doughty (CEO, Prefactor.Ai).
-Voice: High-signal, cynical about hype, direct.
+Act as Matt Doughty, CEO of Prefactor.Ai.
+Tone is direct, founder-to-founder, and concise. No fluff.
 
-Task: Write a post-connection LinkedIn message under 200 characters.
+Required structure:
+1. Opener: "Hey {Name}, Thanks for connecting."
+2. Context: "We're building in the Agentic Governance space."
+3. Role-based focus: select one based on their title
+   - GRC / Risk / Compliance: focus on moving agents from sandbox to production without legal or compliance blockers
+   - Head of AI / AI Lead: focus on the tension between output quality and pressure to scale fast
+   - CTO / CIO / Product / Architecture leaders: focus on managing board-level pressure for ROI versus infrastructure reality
+   - CISO / Security: focus on risk management and preventing agentic sprawl
+4. Personal hook: "I was really interested in {Recent_Post_or_Company_Move}."
+5. Location-based close:
+   - If Sydney: "I'm based here in Sydney, would be great to grab a coffee in person if you're around."
+   - If Melbourne or Brisbane: "We're going to be running an event in {City} next month, would be great to grab a coffee while I'm down there."
+   - If Singapore, US, UK, or Canada: "I'm going to be there in a couple of months, would be great to connect in person if you're around."
+6. Sign-off: "Matt"
 
-Data Integration Rules:
-1. The Post Hook:
-   - If they posted recently, do not say "I liked your post."
-   - Take the contrarian side of their point.
-   - Example: if they post about AI efficiency, ask about the hidden compute cost.
-2. The Press/Company Hook:
-   - If the company just launched an AI product, ask about the ugly part of the build.
-   - Focus on security, data privacy, latency, governance, or reliability.
-3. The Role Hook:
-   - If they are a Head of AI or similar leader, assume they are fighting a battle with the Board or IT Security.
-   - Mention that specific friction.
-
-The Matt banned list:
-- Never use: congrats, impressive, goldmine, exciting, well-deserved
-- Never explain their company's product back to them
-- Never flatter
-
-Structure:
-- Start with "Hi {FirstName},"
-- Ask a direct question based on the tension between their recent post or company signal and the reality of their role
-- Add a short Matt-style assertion only if it sharpens the point
-- End with "Matt"
-
-Output rules:
-- Under 200 characters
-- One short paragraph
-- No emojis
+Rules:
+- Use the structure above exactly
+- Keep it concise and natural
+- Use a real recent post, company move, or role-relevant signal when available
+- Do not use hypey compliments or generic networking filler
+- Do not explain their company back to them
 - Output only the final message"""
 
 
@@ -183,7 +175,7 @@ def generate_outreach_draft(outreach_row: dict) -> str:
 
     resp = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=400,
+        max_tokens=600,
         system=OUTREACH_SYSTEM,
         messages=[
             {
@@ -194,14 +186,14 @@ PROFILE:
 {chr(10).join(context_parts)}
 
 Rules:
-- Use the strongest available hook in this order: recent post, recent company/press signal, role tension
-- If there is a recent post, take the contrarian side of it
-- Ask about real friction: security, latency, data privacy, governance, compliance, board pressure, rollout pain
-- Do not compliment them
-- Do not restate their company pitch back to them
-- Start with "Hi {first_name}," using their first name only
+- Use this exact opener: "Hey {first_name}, Thanks for connecting."
+- Include this exact context sentence: "We're building in the Agentic Governance space."
+- Choose the role-based focus that best matches their title
+- Include a personal hook tied to a recent post, company move, or role-relevant signal
+- Use the location-based close if location data is available and matches Sydney, Melbourne, Brisbane, Singapore, US, UK, or Canada
+- If location is unknown, use a neutral close inviting an in-person connection when timing lines up
 - End with "Matt"
-- Under 200 characters total
+- Keep the message concise and natural
 - Output only the final message
 """,
             }
@@ -209,7 +201,7 @@ Rules:
     )
     text = resp.content[0].text.strip().replace("\n", " ")
     text = " ".join(text.split())
-    return text[:200]
+    return text[:400]
 
 
 def enrich_and_store(supabase_client: Client, outreach_id: str, row: dict) -> dict:
