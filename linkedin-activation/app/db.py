@@ -161,3 +161,30 @@ def set_status(connection_id: str, status: str):
 def set_error(connection_id: str, status: str, message: str):
     last_error = message[:1000] if message else None
     get_db().table(TABLE).update({"status": status, "last_error": last_error}).eq("id", connection_id).execute()
+
+
+def queue_direct_send(payload: dict) -> dict:
+    public_identifier = payload["public_identifier"].strip()
+    linkedin_urn = payload.get("linkedin_urn") or f"pending:{public_identifier}"
+    data = {
+        "linkedin_urn": linkedin_urn,
+        "public_identifier": public_identifier,
+        "first_name": payload.get("first_name", ""),
+        "last_name": payload.get("last_name", ""),
+        "headline": payload.get("headline", ""),
+        "summary": payload.get("summary", ""),
+        "location": payload.get("location", ""),
+        "industry": payload.get("industry", ""),
+        "experience": payload.get("experience", []),
+        "recent_posts": payload.get("recent_posts", []),
+        "draft_message": payload["draft_message"],
+        "status": "pending_send",
+        "last_error": None,
+    }
+    resp = (
+        get_db()
+        .table(TABLE)
+        .upsert(data, on_conflict="linkedin_urn")
+        .execute()
+    )
+    return resp.data[0]

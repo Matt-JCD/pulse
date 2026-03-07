@@ -92,6 +92,17 @@ async function fetchFullProfile(csrf, publicIdentifier) {
   ).catch(() => null);
 }
 
+function extractProfileUrn(profileView) {
+  if (!profileView) return "";
+  return (
+    profileView.profile?.entityUrn ||
+    profileView.profile?.miniProfile?.entityUrn ||
+    profileView.profile?.objectUrn ||
+    profileView.miniProfile?.entityUrn ||
+    ""
+  );
+}
+
 async function fetchRecentPosts(csrf, urn) {
   const url = new URL("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2");
   url.searchParams.set("profileUrn", urn);
@@ -177,6 +188,23 @@ async function sendLinkedInMessage(csrf, senderUrn, recipientUrn, messageBody) {
   return true;
 }
 
+async function resolveRecipientUrn(csrf, item) {
+  if (item.linkedin_urn && item.linkedin_urn.startsWith("urn:li:fsd_profile:")) {
+    return item.linkedin_urn;
+  }
+
+  if (!item.public_identifier) {
+    throw new Error("No public identifier available to resolve recipient");
+  }
+
+  const profileView = await fetchFullProfile(csrf, item.public_identifier);
+  const resolvedUrn = extractProfileUrn(profileView);
+  if (!resolvedUrn) {
+    throw new Error(`Could not resolve LinkedIn URN for ${item.public_identifier}`);
+  }
+  return resolvedUrn;
+}
+
 async function addLog(status, message) {
   const stored = await chrome.storage.local.get(LOG_KEY);
   const logs = stored[LOG_KEY] || [];
@@ -248,7 +276,8 @@ async function checkPendingSends() {
     const name = `${item.first_name} ${item.last_name}`.trim();
 
     try {
-      await sendLinkedInMessage(creds.csrf, senderUrn, item.linkedin_urn, item.draft_message);
+      const recipientUrn = await resolveRecipientUrn(creds.csrf, item);
+      await sendLinkedInMessage(creds.csrf, senderUrn, recipientUrn, item.draft_message);
 
       const confirmResp = await fetch(`${BACKEND_URL}/confirm-send/${item.id}`, {
         method: "POST",

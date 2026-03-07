@@ -172,6 +172,38 @@ async def pending_sends():
     ]
 
 
+@app.post("/queue-direct-send")
+async def queue_direct_send(request: Request):
+    """Queue a direct message for a known LinkedIn public profile."""
+    body = await request.json()
+    public_identifier = (body.get("public_identifier") or "").strip()
+    draft_message = (body.get("draft_message") or "").strip()
+    if not public_identifier or not draft_message:
+        return {"status": "error", "error": "public_identifier and draft_message are required"}
+
+    try:
+        row = await asyncio.to_thread(
+            db.queue_direct_send,
+            {
+                "public_identifier": public_identifier,
+                "linkedin_urn": body.get("linkedin_urn"),
+                "first_name": body.get("first_name", ""),
+                "last_name": body.get("last_name", ""),
+                "headline": body.get("headline", ""),
+                "summary": body.get("summary", ""),
+                "location": body.get("location", ""),
+                "industry": body.get("industry", ""),
+                "experience": body.get("experience", []),
+                "recent_posts": body.get("recent_posts", []),
+                "draft_message": draft_message,
+            },
+        )
+        return {"status": "ok", "id": row["id"], "public_identifier": row["public_identifier"]}
+    except Exception as e:
+        logger.exception("Queue direct send failed")
+        return {"status": "error", "error": str(e)}
+
+
 @app.post("/confirm-send/{connection_id}")
 async def confirm_send(connection_id: str):
     """Chrome extension calls this after successfully sending a LinkedIn DM."""
