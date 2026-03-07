@@ -126,14 +126,14 @@ class TestGenerateOutreachDraft:
 
     @patch("app.drafter.ANTHROPIC_API_KEY", "test-key")
     @patch("app.drafter.anthropic.Anthropic")
-    def test_truncates_to_400_chars(self, mock_cls):
+    def test_does_not_truncate_output(self, mock_cls):
         mock_client = MagicMock()
         mock_cls.return_value = mock_client
         mock_client.messages.create.return_value = _mock_anthropic_response("x" * 500)
 
         result = generate_outreach_draft(SAMPLE_ROW)
 
-        assert len(result) == 400
+        assert len(result) == 500
 
 
 # ---------------------------------------------------------------------------

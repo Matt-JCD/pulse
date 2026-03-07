@@ -92,7 +92,7 @@ Rules:
     )
     text = resp.content[0].text.strip().replace("\n", " ")
     text = " ".join(text.split())
-    return text[:400]
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ Rules:
     )
     text = resp.content[0].text.strip().replace("\n", " ")
     text = " ".join(text.split())
-    return text[:400]
+    return text
 
 
 def enrich_and_store(supabase_client: Client, outreach_id: str, row: dict) -> dict:
