@@ -4,7 +4,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from app import db
-from app.phantombuster import format_date_for_pb, launch_connections_export
+from app.config import PB_CONNECTIONS_AGENT_ID
+from app.phantombuster import expected_webhook_url, format_date_for_pb, launch_connections_export
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,12 @@ def launch_detection() -> dict:
         latest_date = datetime.now(timezone.utc) - timedelta(days=7)
 
     date_str = format_date_for_pb(latest_date)
-    logger.info("[outreach:detection] Launching PB connections export dateAfter=%s", date_str)
+    logger.info(
+        "[outreach:detection] Launching PB connections export agentId=%s dateAfter=%s webhook=%s",
+        PB_CONNECTIONS_AGENT_ID or "<missing>",
+        date_str,
+        expected_webhook_url() or "<not-configured>",
+    )
     result = launch_connections_export(date_str)
     logger.info("[outreach:detection] PB launch accepted, containerId=%s", result.get("containerId"))
     return result

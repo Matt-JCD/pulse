@@ -15,7 +15,10 @@ from app import db
 from app.attio_sync import sync_all_unsynced
 from app.config import (
     ADMIN_API_KEY,
+    APP_BASE_URL,
     DAILY_SEND_LIMIT,
+    PB_CONNECTIONS_AGENT_ID,
+    PB_MESSAGE_SENDER_AGENT_ID,
     SLACK_BOT_TOKEN,
     SLACK_CHANNEL,
     SLACK_SIGNING_SECRET,
@@ -23,7 +26,7 @@ from app.config import (
 )
 from app.detection_launcher import launch_detection
 from app.drafter import draft_all_detected
-from app.phantombuster import validate_webhook_secret
+from app.phantombuster import expected_webhook_url, validate_webhook_secret
 from app.phantombuster_webhook import process_pb_webhook
 from app.send_launcher import launch_approved_sends
 from app.slack_bot import (
@@ -171,6 +174,19 @@ async def outreach_status():
         "recent_failures": failures,
         "send_today": {"sent": sent_today, "limit": DAILY_SEND_LIMIT},
         "attio": attio,
+    }
+
+
+@app.get("/admin/outreach/config", dependencies=[Depends(verify_admin_key)])
+async def outreach_config():
+    """Operator diagnostics for the PB-linked outreach pipeline."""
+    webhook_url = expected_webhook_url()
+    return {
+        "app_base_url": APP_BASE_URL or None,
+        "pb_connections_agent_id": PB_CONNECTIONS_AGENT_ID or None,
+        "pb_message_sender_agent_id": PB_MESSAGE_SENDER_AGENT_ID or None,
+        "pb_webhook_secret_configured": bool(webhook_url),
+        "expected_webhook_url": webhook_url or None,
     }
 
 

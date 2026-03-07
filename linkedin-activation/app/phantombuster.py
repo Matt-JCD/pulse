@@ -7,6 +7,7 @@ from datetime import datetime
 import httpx
 
 from app.config import (
+    APP_BASE_URL,
     PHANTOMBUSTER_API_KEY,
     PB_CONNECTIONS_AGENT_ID,
     PB_MESSAGE_SENDER_AGENT_ID,
@@ -94,3 +95,13 @@ def validate_webhook_secret(query_secret: str) -> bool:
     if not PB_WEBHOOK_SECRET:
         return False
     return hmac.compare_digest(query_secret, PB_WEBHOOK_SECRET)
+
+
+def expected_webhook_url() -> str:
+    """Return the expected PB callback URL for operator diagnostics."""
+    if not APP_BASE_URL:
+        return ""
+    base_url = APP_BASE_URL.rstrip("/")
+    if not PB_WEBHOOK_SECRET:
+        return f"{base_url}/phantombuster/webhook"
+    return f"{base_url}/phantombuster/webhook?secret={PB_WEBHOOK_SECRET}"

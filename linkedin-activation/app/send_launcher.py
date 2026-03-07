@@ -6,8 +6,8 @@ import time
 from supabase import Client
 
 from app import db
-from app.config import DAILY_SEND_LIMIT
-from app.phantombuster import launch_message_sender
+from app.config import DAILY_SEND_LIMIT, PB_MESSAGE_SENDER_AGENT_ID
+from app.phantombuster import expected_webhook_url, launch_message_sender
 from app.state_machine import transition_status
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,12 @@ def launch_approved_sends(supabase_client: Client) -> dict:
             continue
 
         try:
+            logger.info(
+                "[outreach:send] Launching PB sender agentId=%s outreach=%s webhook=%s",
+                PB_MESSAGE_SENDER_AGENT_ID or "<missing>",
+                row["id"],
+                expected_webhook_url() or "<not-configured>",
+            )
             result = launch_message_sender(profile_url, message)
             container_id = result.get("containerId")
             db.update_outreach(row["id"], {"pb_send_container_id": container_id})
