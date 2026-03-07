@@ -20,14 +20,14 @@ Your job: write a hyper-personalised opening message that makes this person want
 You have their full profile, work history, and recent LinkedIn posts.
 
 PRIORITY ORDER for what to reference:
-1. Their recent posts about AI, AI agents, MCP, Claude, LLMs, or automation — quote or
+1. Their recent posts about AI, AI agents, MCP, Claude, LLMs, or automation - quote or
    reference a specific insight they shared. This is gold.
-2. A specific company initiative or product they're building — show you understand what
+2. A specific company initiative or product they're building - show you understand what
    their company actually does, not just their job title.
 3. Something specific from their About section or work experience that connects to
    what Matt cares about (AI agents, enterprise automation, founder life).
 4. If none of the above exist, find ANY specific detail that shows you actually read
-   their profile — a unique career move, an interesting company, a niche expertise.
+   their profile - a unique career move, an interesting company, a niche expertise.
 
 NEVER fall back to generic "great to connect" messages. If there's truly nothing
 specific to reference, say something provocative about their industry + AI."""
@@ -55,7 +55,7 @@ def draft_message(enrichment: dict, api_key: str) -> str:
         desc = exp.get("description", "")
         line = f"Role: {title} at {company}"
         if desc:
-            line += f" — {desc[:200]}"
+            line += f" - {desc[:200]}"
         context_parts.append(line)
 
     if posts:
@@ -78,10 +78,10 @@ PROFILE:
 {chr(10).join(context_parts)}
 
 Rules:
-- Max 200 characters (this is HARD limit — count carefully)
+- Max 200 characters (this is HARD limit - count carefully)
 - Reference ONE specific thing: a post they wrote, their company's product, or a concrete detail
 - If they've posted about AI/agents/MCP/LLMs, ALWAYS reference that post specifically
-- No "I saw your post" or "I noticed" — just dive straight into the substance
+- No "I saw your post" or "I noticed" - just dive straight into the substance
 - No pitch. No Prefactor mention unless directly relevant to their work
 - Tone: direct, warm, curious. Like a text from a friend who happens to be a founder
 - End with a specific question or a sharp observation, never "let me know if..."
@@ -99,44 +99,48 @@ Rules:
 # Outreach drafting (linkedin_outreach table)
 # ---------------------------------------------------------------------------
 
-OUTREACH_SYSTEM = """Persona: Matt Doughty (CEO, Prefactor.Ai).
-Voice: Direct, minimalist, peer-to-peer. UK/Sydney founder.
-Task: Write a post-connection LinkedIn message (< 200 characters).
+OUTREACH_SYSTEM = """The Strategic Peer Prompt
 
-Rules for Authenticity:
+Persona: Matt Doughty (CEO, Prefactor.Ai).
+Voice: High-signal, cynical about hype, direct.
 
-1. The Hook: Start with "Hi {{first_name}}," followed immediately by a specific
-   technical or business observation about THEIR company or work.
+Task: Write a post-connection LinkedIn message under 200 characters.
 
-2. No Setup: Never use "I noticed," "Given your role," or "With your background."
-   Just dive in.
+Data Integration Rules:
+1. The Post Hook:
+   - If they posted recently, do not say "I liked your post."
+   - Take the contrarian side of their point.
+   - Example: if they post about AI efficiency, ask about the hidden compute cost.
+2. The Press/Company Hook:
+   - If the company just launched an AI product, ask about the ugly part of the build.
+   - Focus on security, data privacy, latency, governance, or reliability.
+3. The Role Hook:
+   - If they are a Head of AI or similar leader, assume they are fighting a battle with the Board or IT Security.
+   - Mention that specific friction.
 
-3. The Assertion: Use "must be" or "must get" to highlight a friction point they
-   likely face (e.g., "Those governance gates must be a nightmare to clear").
-   It should feel like a peer-to-peer insight.
+The Matt banned list:
+- Never use: congrats, impressive, goldmine, exciting, well-deserved
+- Never explain their company's product back to them
+- Never flatter
 
-4. No Fluff: Remove "I'd love to know" or "I'm curious."
+Structure:
+- Start with "Hi {FirstName},"
+- Ask a direct question based on the tension between their recent post or company signal and the reality of their role
+- Add a short Matt-style assertion only if it sharpens the point
+- End with "Matt"
 
-5. Mandatory Signature: Always end the message with a simple "Matt".
-   No "Cheers" or "Best."
-
-6. Constraint: Strictly under 200 characters.
-
-PRIORITY for what to reference:
-1. Their recent posts about AI, agents, MCP, LLMs, or automation — reference a
-   specific insight or stat they shared.
-2. A specific company initiative, product, or known challenge at their company.
-3. Something from their About section or experience that connects to AI agents,
-   enterprise automation, or founder life.
-4. If nothing specific exists, say something provocative about their industry + AI.
-
-Output ONLY the message text, nothing else. No quotes, no explanation."""
+Output rules:
+- Under 200 characters
+- One short paragraph
+- No emojis
+- Output only the final message"""
 
 
 def generate_outreach_draft(outreach_row: dict) -> str:
     """Generate a personalised welcome message using enriched profile data."""
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     full_name = outreach_row.get("full_name") or "Unknown"
+    first_name = outreach_row.get("first_name") or full_name.split(" ")[0]
     headline = outreach_row.get("headline") or "N/A"
 
     research = outreach_row.get("research") or {}
@@ -145,6 +149,7 @@ def generate_outreach_draft(outreach_row: dict) -> str:
 
     context_parts = [
         f"Name: {full_name}",
+        f"FirstName: {first_name}",
         f"Headline: {headline}",
     ]
 
@@ -165,7 +170,7 @@ def generate_outreach_draft(outreach_row: dict) -> str:
         desc = exp.get("description", "")
         line = f"Role: {title} at {company}"
         if desc:
-            line += f" — {desc[:200]}"
+            line += f" - {desc[:200]}"
         context_parts.append(line)
 
     if posts:
@@ -188,7 +193,16 @@ def generate_outreach_draft(outreach_row: dict) -> str:
 PROFILE:
 {chr(10).join(context_parts)}
 
-Remember: "Hi {{first_name}}," + specific observation + "must be"/"must get" assertion + end with "Matt". Under 200 characters strictly.
+Rules:
+- Use the strongest available hook in this order: recent post, recent company/press signal, role tension
+- If there is a recent post, take the contrarian side of it
+- Ask about real friction: security, latency, data privacy, governance, compliance, board pressure, rollout pain
+- Do not compliment them
+- Do not restate their company pitch back to them
+- Start with "Hi {first_name}," using their first name only
+- End with "Matt"
+- Under 200 characters total
+- Output only the final message
 """,
             }
         ],
@@ -213,8 +227,11 @@ def enrich_and_store(supabase_client: Client, outreach_id: str, row: dict) -> di
     if research.get("profile"):
         db.update_outreach(outreach_id, {"research": research})
         row["research"] = research
-        logger.info("[outreach:enrich] Stored enrichment for %s (posts: %d)",
-                    row.get("full_name"), len(research.get("recent_posts", [])))
+        logger.info(
+            "[outreach:enrich] Stored enrichment for %s (posts: %d)",
+            row.get("full_name"),
+            len(research.get("recent_posts", [])),
+        )
     else:
         logger.warning("[outreach:enrich] No profile data returned for %s", username)
 
@@ -234,10 +251,9 @@ def draft_and_update_outreach(supabase_client: Client, outreach_id: str) -> None
     ).data
 
     if row["status"] != "detected":
-        logger.warning("Skipping draft for %s — status is %s", outreach_id, row["status"])
+        logger.warning("Skipping draft for %s - status is %s", outreach_id, row["status"])
         return
 
-    # Enrich via LinkdAPI if not already enriched
     if not row.get("research"):
         row = enrich_and_store(supabase_client, outreach_id, row)
 
