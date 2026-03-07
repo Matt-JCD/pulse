@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.phantombuster_webhook import (
+    _extract_webhook_metadata,
     handle_connections_result,
     handle_send_success,
     handle_send_failure,
@@ -74,6 +75,25 @@ class TestHelpers:
 
     def test_public_identifier_no_trailing_slash(self):
         assert _public_identifier_from_url("https://www.linkedin.com/in/jdoe") == "jdoe"
+
+    def test_extracts_nested_webhook_metadata(self):
+        payload = {
+            "event": "agent.finished",
+            "data": {
+                "agentId": "conn-agent-123",
+                "agentName": "LinkedIn Connections Export",
+                "containerId": "container-nested",
+                "exitCode": "0",
+                "exitMessage": "finished",
+            },
+        }
+
+        meta = _extract_webhook_metadata(payload)
+
+        assert meta["agent_id"] == "conn-agent-123"
+        assert meta["agent_name"] == "LinkedIn Connections Export"
+        assert meta["container_id"] == "container-nested"
+        assert meta["exit_code"] == "0"
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +206,26 @@ class TestHandleConnectionsResult:
         second_call = mock_db.upsert_outreach_connection.call_args_list[1]
         data = second_call.args[0]
         assert data["headline"] == "VP Engineering, Platform"
+
+
+class TestProcessWebhookRouting:
+    @patch("app.phantombuster_webhook.PB_CONNECTIONS_AGENT_ID", "conn-agent-123")
+    @patch("app.phantombuster_webhook.handle_connections_result")
+    def test_routes_nested_success_payload(self, mock_handle):
+        from app.phantombuster_webhook import process_pb_webhook
+
+        payload = {
+            "event": "agent.finished",
+            "data": {
+                "agentId": "conn-agent-123",
+                "containerId": "container-nested",
+                "exitCode": "0",
+            },
+        }
+
+        process_pb_webhook(payload)
+
+        mock_handle.assert_called_once_with(payload)
 
 
 # ---------------------------------------------------------------------------

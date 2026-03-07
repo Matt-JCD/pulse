@@ -25,6 +25,35 @@ logger = logging.getLogger(__name__)
 _parse_company_from_headline = parse_company_from_headline
 
 
+def _find_first_value(obj, candidate_keys: tuple[str, ...]):
+    """Recursively find the first matching key in a nested dict/list payload."""
+    if isinstance(obj, dict):
+        for key in candidate_keys:
+            if key in obj and obj[key] not in (None, ""):
+                return obj[key]
+        for value in obj.values():
+            found = _find_first_value(value, candidate_keys)
+            if found not in (None, ""):
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _find_first_value(item, candidate_keys)
+            if found not in (None, ""):
+                return found
+    return None
+
+
+def _extract_webhook_metadata(payload: dict) -> dict[str, object]:
+    """Normalize PhantomBuster webhook payloads across flat and nested variants."""
+    return {
+        "agent_id": _find_first_value(payload, ("agentId", "agent_id", "phantomId", "phantom_id")),
+        "agent_name": _find_first_value(payload, ("agentName", "agent_name", "phantomName", "phantom_name")),
+        "container_id": _find_first_value(payload, ("containerId", "container_id", "launchId", "launch_id")) or "?",
+        "exit_code": _find_first_value(payload, ("exitCode", "exit_code", "statusCode", "status_code")),
+        "exit_message": _find_first_value(payload, ("exitMessage", "exit_message", "status", "message")),
+    }
+
+
 def _public_identifier_from_url(url: str) -> str:
     """Extract public identifier from a LinkedIn profile URL."""
     return url.rstrip("/").split("/")[-1]
@@ -157,13 +186,15 @@ def _update_slack_message(row: dict, status_text: str) -> None:
 
 def process_pb_webhook(payload: dict) -> None:
     """Route a PhantomBuster webhook payload to the correct handler."""
-    agent_id = payload.get("agentId")
-    exit_code = payload.get("exitCode")
-    container_id = payload.get("containerId", "?")
+    meta = _extract_webhook_metadata(payload)
+    agent_id = meta["agent_id"]
+    exit_code = meta["exit_code"]
+    container_id = str(meta["container_id"])
+    agent_name = meta["agent_name"]
 
     logger.info(
-        "[webhook] Processing PB webhook: agentId=%s exitCode=%s(%s) containerId=%s",
-        agent_id, exit_code, type(exit_code).__name__, container_id,
+        "[webhook] Processing PB webhook: agentId=%s agentName=%s exitCode=%s(%s) containerId=%s",
+        agent_id, agent_name, exit_code, type(exit_code).__name__, container_id,
     )
 
     try:
@@ -186,7 +217,10 @@ def process_pb_webhook(payload: dict) -> None:
                 handle_send_failure(payload)
 
         else:
-            logger.warning("Unknown agentId in PB webhook: %s keys=%s", agent_id, list(payload.keys()))
+            logger.warning(
+                "Unknown agentId in PB webhook: %s agentName=%s keys=%s",
+                agent_id, agent_name, list(payload.keys()),
+            )
 
     except Exception:
         logger.exception("[webhook] process_pb_webhook crashed for container %s", container_id)
