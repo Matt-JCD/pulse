@@ -9,9 +9,9 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     "drafted": ["awaiting_review"],
     "awaiting_review": ["approved", "rejected"],
     "approved": ["send_queued"],
-    "send_queued": ["sending"],
+    "send_queued": ["sending", "sent", "send_failed"],
     "sending": ["sent", "send_failed"],
-    "send_failed": ["send_queued"],
+    "send_failed": ["approved"],
 }
 
 

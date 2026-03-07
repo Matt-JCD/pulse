@@ -122,7 +122,7 @@ async def launch_approved_sends_job():
 
 @app.post("/outreach/{outreach_id}/retry-send")
 async def retry_outreach_send(outreach_id: str):
-    """Retry a failed send. Only allowed for send_failed rows with retry_count < 3."""
+    """Retry a failed send by moving it back to approved."""
     from app.state_machine import transition_status
 
     row = await asyncio.to_thread(db.get_outreach, outreach_id)
@@ -134,7 +134,7 @@ async def retry_outreach_send(outreach_id: str):
         return {"status": "error", "error": "Max retries (3) reached"}
 
     supabase = db.get_db()
-    await asyncio.to_thread(transition_status, supabase, outreach_id, "send_queued")
+    await asyncio.to_thread(transition_status, supabase, outreach_id, "approved")
     return {"status": "ok", "outreach_id": outreach_id}
 
 

@@ -257,3 +257,20 @@ class TestRetryEndpoint:
         data = resp.json()
         assert data["status"] == "error"
         assert "Max retries" in data["error"]
+
+    @patch("app.state_machine.transition_status")
+    @patch("app.db.get_db")
+    @patch("app.db.get_outreach")
+    def test_moves_failed_row_back_to_approved(self, mock_get, mock_get_db, mock_transition):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        mock_get.return_value = {"id": "r1", "status": "send_failed", "retry_count": 1}
+        mock_get_db.return_value = MagicMock()
+        client = TestClient(app)
+
+        resp = client.post("/outreach/r1/retry-send")
+        data = resp.json()
+
+        assert data["status"] == "ok"
+        mock_transition.assert_called_once_with(mock_get_db.return_value, "r1", "approved")

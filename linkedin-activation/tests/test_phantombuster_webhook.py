@@ -199,7 +199,7 @@ class TestHandleSendSuccess:
     def test_marks_row_as_sent(self, mock_transition, mock_db, _mock_slack):
         existing_row = {
             "id": "outreach-1",
-            "status": "sending",
+            "status": "send_queued",
             "retry_count": 0,
             "slack_message_ts": None,
         }
@@ -223,7 +223,7 @@ class TestHandleSendSuccess:
     def test_updates_slack_on_success(self, _mock_transition, mock_db, mock_slack):
         existing_row = {
             "id": "outreach-1",
-            "status": "sending",
+            "status": "send_queued",
             "slack_message_ts": "123.456",
             "slack_channel": "C-test",
             "full_name": "John Doe",
@@ -247,7 +247,7 @@ class TestHandleSendFailure:
     def test_marks_row_as_send_failed(self, mock_transition, mock_db, _mock_slack):
         existing_row = {
             "id": "outreach-1",
-            "status": "sending",
+            "status": "send_queued",
             "retry_count": 1,
             "slack_message_ts": None,
         }
@@ -272,7 +272,7 @@ class TestHandleSendFailure:
     def test_updates_slack_on_failure(self, _mock_transition, mock_db, mock_slack):
         existing_row = {
             "id": "outreach-1",
-            "status": "sending",
+            "status": "send_queued",
             "retry_count": 0,
             "slack_message_ts": "123.456",
             "slack_channel": "C-test",
