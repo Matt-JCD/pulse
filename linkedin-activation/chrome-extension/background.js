@@ -269,11 +269,17 @@ async function getActiveLinkedInProfileContext() {
       const canonicalHref =
         document.querySelector('link[rel="canonical"]')?.href || window.location.href || "";
       const html = document.documentElement?.innerHTML || "";
-      const profileUrnMatch = html.match(/urn:li:fsd_profile:[A-Za-z0-9_-]+/);
+      const profileUrnMatch = html.match(/urn:li:(?:fsd_profile|fs_profile|fs_miniProfile|member):[A-Za-z0-9_-]+/);
       const pathnameMatch = canonicalHref.match(/\/in\/([^/?#]+)/i);
+      let profileUrn = profileUrnMatch ? profileUrnMatch[0] : "";
+      if (profileUrn) {
+        const parts = profileUrn.split(":");
+        const memberId = parts[parts.length - 1];
+        profileUrn = `urn:li:fsd_profile:${memberId}`;
+      }
       return {
         publicIdentifier: pathnameMatch ? decodeURIComponent(pathnameMatch[1]) : "",
-        profileUrn: profileUrnMatch ? profileUrnMatch[0] : "",
+        profileUrn,
       };
     },
   });
