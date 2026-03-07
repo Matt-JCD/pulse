@@ -92,6 +92,15 @@ async function fetchFullProfile(csrf, publicIdentifier) {
   ).catch(() => null);
 }
 
+async function fetchProfilePageHtml(publicIdentifier) {
+  if (!publicIdentifier) return "";
+  const resp = await fetch(`https://www.linkedin.com/in/${publicIdentifier}/`, {
+    credentials: "include",
+  });
+  if (!resp.ok) return "";
+  return resp.text();
+}
+
 function extractProfileUrn(profileView) {
   if (!profileView) return "";
   return (
@@ -99,8 +108,32 @@ function extractProfileUrn(profileView) {
     profileView.profile?.miniProfile?.entityUrn ||
     profileView.profile?.objectUrn ||
     profileView.miniProfile?.entityUrn ||
-    ""
-  );
+      ""
+    );
+}
+
+function normalizeProfileUrn(profileUrn) {
+  if (!profileUrn) return "";
+  const parts = profileUrn.split(":");
+  const memberId = parts[parts.length - 1];
+  return memberId ? `urn:li:fsd_profile:${memberId}` : "";
+}
+
+function extractProfileUrnFromHtml(html = "") {
+  if (!html) return "";
+  const patterns = [
+    /urn:li:(?:fsd_profile|fs_profile|fs_miniProfile|member):[A-Za-z0-9_-]+/,
+    /"entityUrn":"(urn:li:[^"]+)"/,
+    /"objectUrn":"(urn:li:[^"]+)"/,
+    /"profileUrn":"(urn:li:[^"]+)"/,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    const raw = match ? (match[1] || match[0]) : "";
+    const normalized = normalizeProfileUrn(raw);
+    if (normalized) return normalized;
+  }
+  return "";
 }
 
 async function fetchRecentPosts(csrf, urn) {
@@ -213,10 +246,17 @@ async function resolveRecipientUrn(csrf, item) {
 
   const profileView = await fetchFullProfile(csrf, publicIdentifier);
   const resolvedUrn = extractProfileUrn(profileView);
-  if (!resolvedUrn) {
-    throw new Error(`Could not resolve LinkedIn URN for ${publicIdentifier}`);
+  if (resolvedUrn) {
+    return normalizeProfileUrn(resolvedUrn);
   }
-  return resolvedUrn;
+
+  const profileHtml = await fetchProfilePageHtml(publicIdentifier);
+  const htmlUrn = extractProfileUrnFromHtml(profileHtml);
+  if (htmlUrn) {
+    return htmlUrn;
+  }
+
+  throw new Error(`Could not resolve LinkedIn URN for ${publicIdentifier}`);
 }
 
 async function addLog(status, message) {
@@ -268,23 +308,21 @@ async function getActiveLinkedInProfileContext() {
     func: () => {
       const canonicalHref =
         document.querySelector('link[rel="canonical"]')?.href || window.location.href || "";
-      const html = document.documentElement?.innerHTML || "";
-      const profileUrnMatch = html.match(/urn:li:(?:fsd_profile|fs_profile|fs_miniProfile|member):[A-Za-z0-9_-]+/);
-      const pathnameMatch = canonicalHref.match(/\/in\/([^/?#]+)/i);
-      let profileUrn = profileUrnMatch ? profileUrnMatch[0] : "";
-      if (profileUrn) {
-        const parts = profileUrn.split(":");
-        const memberId = parts[parts.length - 1];
-        profileUrn = `urn:li:fsd_profile:${memberId}`;
-      }
-      return {
-        publicIdentifier: pathnameMatch ? decodeURIComponent(pathnameMatch[1]) : "",
-        profileUrn,
-      };
-    },
+        const html = document.documentElement?.innerHTML || "";
+        const profileUrnMatch = html.match(/urn:li:(?:fsd_profile|fs_profile|fs_miniProfile|member):[A-Za-z0-9_-]+/);
+        const pathnameMatch = canonicalHref.match(/\/in\/([^/?#]+)/i);
+        return {
+          publicIdentifier: pathnameMatch ? decodeURIComponent(pathnameMatch[1]) : "",
+          profileUrn: profileUrnMatch ? profileUrnMatch[0] : "",
+        };
+      },
   });
 
-  return result?.result || { publicIdentifier: "", profileUrn: "" };
+  const context = result?.result || { publicIdentifier: "", profileUrn: "" };
+  return {
+    publicIdentifier: context.publicIdentifier || "",
+    profileUrn: normalizeProfileUrn(context.profileUrn || ""),
+  };
 }
 
 async function maybeRunCheckOnLinkedInOpen(url) {
