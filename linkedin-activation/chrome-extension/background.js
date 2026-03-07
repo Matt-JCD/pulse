@@ -193,9 +193,18 @@ async function resolveRecipientUrn(csrf, item) {
     return item.linkedin_urn;
   }
 
+  let activeProfile = { publicIdentifier: "", profileUrn: "" };
+  if (!item.public_identifier || item.linkedin_urn?.startsWith("pending:")) {
+    activeProfile = await getActiveLinkedInProfileContext();
+    if (activeProfile.profileUrn) {
+      return activeProfile.profileUrn;
+    }
+  }
+
   let publicIdentifier = item.public_identifier || "";
   if (!publicIdentifier || item.linkedin_urn?.startsWith("pending:")) {
-    publicIdentifier = (await getActiveLinkedInPublicIdentifier()) || publicIdentifier;
+    publicIdentifier =
+      activeProfile.publicIdentifier || (await getActiveLinkedInPublicIdentifier()) || publicIdentifier;
   }
 
   if (!publicIdentifier) {
@@ -245,6 +254,31 @@ async function getActiveLinkedInPublicIdentifier() {
   const activeTab = tabs.find((tab) => isLinkedInUrl(tab.url));
   if (!activeTab?.url) return "";
   return extractPublicIdentifierFromUrl(activeTab.url);
+}
+
+async function getActiveLinkedInProfileContext() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const activeTab = tabs.find((tab) => isLinkedInUrl(tab.url));
+  if (!activeTab?.id || !activeTab.url) {
+    return { publicIdentifier: "", profileUrn: "" };
+  }
+
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: activeTab.id },
+    func: () => {
+      const canonicalHref =
+        document.querySelector('link[rel="canonical"]')?.href || window.location.href || "";
+      const html = document.documentElement?.innerHTML || "";
+      const profileUrnMatch = html.match(/urn:li:fsd_profile:[A-Za-z0-9_-]+/);
+      const pathnameMatch = canonicalHref.match(/\/in\/([^/?#]+)/i);
+      return {
+        publicIdentifier: pathnameMatch ? decodeURIComponent(pathnameMatch[1]) : "",
+        profileUrn: profileUrnMatch ? profileUrnMatch[0] : "",
+      };
+    },
+  });
+
+  return result?.result || { publicIdentifier: "", profileUrn: "" };
 }
 
 async function maybeRunCheckOnLinkedInOpen(url) {
