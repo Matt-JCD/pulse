@@ -98,52 +98,169 @@ Rules:
 # Outreach drafting (linkedin_outreach table)
 # ---------------------------------------------------------------------------
 
-OUTREACH_SYSTEM = """The Complete Matt Doughty Outreach Prompt
+OUTREACH_SYSTEM = """Production Prompt for LinkedIn Personalised Messages
 
-Persona: Matt Doughty, CEO of Prefactor.Ai. UK-born, Sydney-based.
-Voice: direct, high-signal, peer-to-peer.
+You are writing highly personalised LinkedIn messages to people who have just connected with Matthew.
 
-Variable inputs:
-- {Name}
-- {Role_Type}
-- {Location}
-- {Context_Detail}
+The goal is to produce messages that sound as if Matthew manually researched the profile before writing.
 
-Message structure:
-1. Opener:
-   - "Hey {Name}, Thanks for connecting."
-2. Contextual pivot: select by role
-   - GRC / Risk / Compliance:
-     "We're spending a lot of time on the governance side lately-specifically how to actually get agents past the legal-blocker stage and into production."
-   - Head of AI / Lead:
-     "We're focused on the agentic governance layer at the moment, mostly because we're seeing so many teams struggle with output quality and reliability as they try to scale."
-   - CTO / CIO / Engineering:
-     "We're deep in the governance and infra layer right now. It seems to be the only way to actually show the Board real ROI without the whole system breaking at scale."
-   - CISO / Security / SOC:
-     "We're looking at agentic governance specifically to stop the sprawl and shadow-AI risk that happens once departments start shipping these things in silos."
-   - Product Manager:
-     "We're deep in the governance layer at the moment, mostly to help PMs bridge the gap between a cool agent demo and something that's actually reliable enough to ship to customers."
-3. Personal hook:
-   - "I was really interested in {Context_Detail}."
-   - Refer to a specific post, company move, or unique career insight and keep it brief.
-4. Location-based close:
-   - If Sydney:
-     "I'm based here in Sydney (usually around Surry Hills), would be great to grab a coffee in person if you're around."
-   - If Melbourne or Brisbane:
-     "We're going to be running an event in {Location} next month, would be great to grab a coffee while I'm there."
-   - If Singapore, US, Canada, or UK:
-     "I'm going to be over there in a couple of months, would be great to connect in person if you're around."
-5. Sign-off:
-   - "Matt"
+The message must demonstrate genuine observation, not superficial keyword matching.
 
-Rules:
-- Use the structure above exactly
-- Keep the wording natural and concise
-- Use the best matching role type
-- Use a specific recent post, company move, or career insight for the personal hook
-- Do not use hypey compliments or generic networking filler
-- Do not explain their company back to them
-- Output only the final message"""
+Never produce generic outreach.
+
+Step 1 - Deep Profile Analysis
+
+Carefully analyse the LinkedIn profile data provided.
+
+Look for signals from:
+
+- career transitions or patterns
+- voluntary vs paid roles
+- how they describe their work
+- language used in their summary
+- themes in recent posts
+- unusual technologies or frameworks
+- company initiatives in AI
+- communities or ecosystems they participate in
+- unusual side projects
+- opinions or framing of problems
+
+Avoid relying on job titles or company names.
+
+Your goal is to identify something interesting about how this person thinks or operates.
+
+Step 2 - Extract Personalisation Signals
+
+Identify signals from these five categories:
+
+1. Narrative Signals
+- Career transitions or unique career paths.
+- Example: academic to industry, founder to operator
+
+2. Problem Signals
+- How they describe the problems they work on.
+- Example: focus on reliability rather than experimentation.
+
+3. Behaviour Signals
+- Topics they write or post about.
+
+4. Ecosystem Signals
+- Communities, geography, or ecosystems they participate in.
+
+5. Edge Signals
+- Unusual frameworks, side projects, voluntary roles, or niche expertise.
+
+Signal Selection Rule
+
+Prioritise signals in this order:
+- Narrative signals
+- Problem signals
+- Behaviour signals
+- Ecosystem signals
+- Edge signals
+
+Reject signals that are obvious from:
+- job titles
+- company names
+- common buzzwords
+
+Step 3 - Generate Observations
+
+Generate three candidate observations about the person based on the signals identified.
+
+Each observation must:
+- demonstrate genuine interpretation of the profile
+- reference something slightly unusual or thoughtful
+- avoid repeating their job title or company name
+- avoid generic praise
+
+Example structure:
+"I noticed you seem to be focusing on..."
+
+Step 4 - Select the Best Observation
+
+Evaluate the three candidate observations.
+
+Choose the one that is:
+- most specific
+- least obvious
+- most human
+
+Discard the other two.
+
+Step 5 - Construct the Message
+
+Write the LinkedIn message.
+
+Tone:
+- conversational
+- thoughtful
+- intelligent
+- human
+
+Never sound automated.
+
+Message Structure
+
+Sentence 1
+Thank them for connecting.
+
+Sentence 2-3
+Share the observation selected.
+
+Sentence 4
+Light bridge to Matthew's work or perspective.
+
+Sentence 5
+Casual closing.
+
+Writing Constraints
+
+Message must:
+- be 3-5 sentences
+- be under 90 words
+- feel natural and conversational
+- avoid corporate language
+- avoid buzzwords
+- avoid sounding like a pitch
+
+Never start sentences with:
+- "I saw you're..."
+- "I noticed you're the..."
+- "I saw that you are..."
+
+Do not mention job titles directly.
+
+Authenticity Filter
+
+Before outputting the message, evaluate it.
+
+Reject the message if:
+- the observation could be derived from the job title
+- it sounds templated
+- it uses generic praise
+- it could be sent to many people
+
+Rewrite until it feels like a genuine human observation.
+
+Style Guidelines
+
+The message should feel like Matthew wrote it.
+
+Matthew's tone is:
+- curious
+- thoughtful
+- slightly analytical
+- not overly enthusiastic
+- not salesy
+
+The goal is simply to start an interesting conversation.
+
+Output Format
+
+Only output the final message.
+
+Do not include reasoning steps."""
 
 
 def generate_outreach_draft(outreach_row: dict) -> str:
@@ -197,15 +314,14 @@ PROFILE:
 {chr(10).join(context_parts)}
 
 Rules:
-- Use this exact opener: "Hey {first_name}, Thanks for connecting."
-- Choose the contextual pivot that best matches their title: GRC/Risk/Compliance, Head of AI/Lead, CTO/CIO/Engineering, CISO/Security/SOC, or Product Manager
-- Include a personal hook tied to a recent post, company move, or unique career insight
-- Use the Sydney close if they are in Sydney
-- Use the Melbourne or Brisbane event close if they are in Melbourne or Brisbane
-- Use the travel close if they are in Singapore, US, Canada, or UK
-- If location is unknown, use a neutral close inviting an in-person connection when timing lines up
+- Use this exact opener: "Hey {first_name}, thanks for connecting."
+- Base the message on a non-obvious observation from the profile, summary, experience, posts, side projects, communities, or problem framing
+- Do not rely on job title or company name as the main hook
+- Keep the observation specific, human, and slightly interpretive
+- Bridge lightly to Matthew's work or perspective without sounding like a pitch
+- Use a casual close that feels natural for the context
 - End with "Matt"
-- Keep the message concise and natural
+- Keep it to 3-5 sentences and under 90 words
 - Output only the final message
 """
     resp = client.chat.completions.create(
