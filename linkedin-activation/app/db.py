@@ -346,6 +346,19 @@ def update_outreach(outreach_id: str, updates: dict) -> dict:
     return resp.data[0]
 
 
+def delete_all_outreach() -> int:
+    """Delete all rows from linkedin_outreach and return the count deleted."""
+    existing = (
+        get_db()
+        .table(OUTREACH_TABLE)
+        .select("id", count="exact")
+        .execute()
+    )
+    count = existing.count or 0
+    get_db().table(OUTREACH_TABLE).delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+    return count
+
+
 def queue_direct_send(payload: dict) -> dict:
     public_identifier = payload["public_identifier"].strip()
     linkedin_urn = payload.get("linkedin_urn") or f"pending:{public_identifier}"

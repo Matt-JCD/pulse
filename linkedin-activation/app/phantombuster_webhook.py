@@ -16,6 +16,7 @@ from app.config import (
     OUTREACH_SLACK_CHANNEL,
     SLACK_BOT_TOKEN,
 )
+from app.outreach_policy import filter_outreach_candidate
 from app.phantombuster import fetch_agent_info, download_result_csv
 from app.state_machine import transition_status
 
@@ -114,6 +115,7 @@ def handle_connections_result(payload: dict) -> dict:
 
     new_ids: list[str] = []
     skipped = 0
+    filtered = 0
     processed = 0
 
     for row in reader:
@@ -129,6 +131,19 @@ def handle_connections_result(payload: dict) -> dict:
             continue
 
         headline = row.get("title", "")
+        is_filtered, matched_pattern = filter_outreach_candidate(headline)
+        if is_filtered:
+            filtered += 1
+            logger.info(
+                "[outreach:detection] Filtering row %d for container %s by headline pattern=%s profile=%s headline=%s",
+                processed,
+                container_id,
+                matched_pattern,
+                profile_url,
+                headline,
+            )
+            continue
+
         data = {
             "linkedin_profile_url": profile_url,
             "public_identifier": _public_identifier_from_url(profile_url),
@@ -166,10 +181,10 @@ def handle_connections_result(payload: dict) -> dict:
             )
 
     logger.info(
-        "[outreach:detection] Webhook processed: %d rows seen, %d new connections, %d skipped (container %s)",
-        processed, len(new_ids), skipped, container_id,
+        "[outreach:detection] Webhook processed: %d rows seen, %d new connections, %d skipped, %d filtered (container %s)",
+        processed, len(new_ids), skipped, filtered, container_id,
     )
-    return {"new_ids": new_ids, "skipped": skipped}
+    return {"new_ids": new_ids, "skipped": skipped, "filtered": filtered}
 
 
 # ---------------------------------------------------------------------------

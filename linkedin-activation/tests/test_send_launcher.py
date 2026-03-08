@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from app.outreach_policy import filter_outreach_candidate, sanitize_message_for_pb
 from app.send_launcher import launch_approved_sends
 
 
@@ -134,6 +135,25 @@ class TestLaunchApprovedSends:
             "https://linkedin.com/in/user-r1",
             "Approved text",
         )
+
+    @patch("app.send_launcher.time.sleep")
+    @patch("app.send_launcher.transition_status")
+    @patch("app.send_launcher.db")
+    @patch("app.send_launcher.launch_message_sender")
+    def test_sanitizes_and_trims_message_before_launch(self, mock_launch, mock_db, _mock_transition, _sleep):
+        mock_db.get_sent_today_count.return_value = 0
+        mock_db.get_approved_outreach.return_value = [
+            _make_row("r1", approved_message='Hello — Simon “test” ' + ("x" * 400)),
+        ]
+        mock_launch.return_value = {"containerId": "c-1"}
+        supabase = MagicMock()
+
+        launch_approved_sends(supabase)
+
+        launched_message = mock_launch.call_args[0][1]
+        assert len(launched_message) <= 280
+        assert "—" not in launched_message
+        assert "“" not in launched_message
 
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
@@ -343,3 +363,24 @@ class TestRetryEndpoint:
         assert data["status"] == "ok"
         assert data["outreach_id"] == "r1"
         mock_transition.assert_called_once_with(mock_get_db.return_value, "r1", "approved")
+
+
+class TestOutreachPolicy:
+    def test_filters_sales_headline(self):
+        should_filter, pattern = filter_outreach_candidate("Senior Sales Consultant")
+        assert should_filter is True
+        assert pattern is not None
+
+    def test_filters_customer_success_headline(self):
+        should_filter, pattern = filter_outreach_candidate("VP Customer Success")
+        assert should_filter is True
+        assert pattern is not None
+
+    def test_keeps_target_headline(self):
+        should_filter, pattern = filter_outreach_candidate("Head of AI Platform")
+        assert should_filter is False
+        assert pattern is None
+
+    def test_sanitizes_message_for_pb(self):
+        result = sanitize_message_for_pb('Hey Simon — "smart" words and spacing\u00a0here')
+        assert result == 'Hey Simon - "smart" words and spacing here'

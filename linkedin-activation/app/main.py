@@ -179,6 +179,13 @@ async def send_simon_test_job():
     }
 
 
+@app.post("/jobs/reset-outreach")
+async def reset_outreach_job():
+    """Temporary operator endpoint. Delete all rows from linkedin_outreach."""
+    deleted = await asyncio.to_thread(db.delete_all_outreach)
+    return {"status": "ok", "deleted": deleted}
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------

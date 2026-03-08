@@ -7,6 +7,7 @@ from supabase import Client
 
 from app import db
 from app.config import DAILY_SEND_LIMIT, PB_MESSAGE_SENDER_AGENT_ID
+from app.outreach_policy import sanitize_message_for_pb
 from app.phantombuster import expected_webhook_url, launch_message_sender
 from app.state_machine import transition_status
 
@@ -34,13 +35,21 @@ def launch_approved_sends(supabase_client: Client) -> dict:
 
     for row in rows:
         profile_url = row.get("linkedin_profile_url")
-        message = row.get("approved_message") or row.get("draft_message")
+        original_message = row.get("approved_message") or row.get("draft_message")
+        message = sanitize_message_for_pb(original_message or "")
         if not profile_url or not message:
             skipped += 1
-            logger.warning("Skipping %s — missing profile URL or message", row["id"])
+            logger.warning("Skipping %s - missing profile URL or message", row["id"])
             continue
 
         try:
+            if original_message and message != original_message:
+                logger.info(
+                    "[outreach:send] Sanitized PB message for %s from %d to %d chars",
+                    row["id"],
+                    len(original_message),
+                    len(message),
+                )
             logger.info(
                 "[outreach:send] Launching PB sender agentId=%s outreach=%s webhook=%s",
                 PB_MESSAGE_SENDER_AGENT_ID or "<missing>",

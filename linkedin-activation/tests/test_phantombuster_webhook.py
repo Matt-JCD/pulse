@@ -225,6 +225,22 @@ class TestHandleConnectionsResult:
         data = second_call.args[0]
         assert data["headline"] == "VP Engineering, Platform"
 
+    @patch("app.phantombuster_webhook.db")
+    @patch("app.phantombuster_webhook.download_result_csv", return_value=(
+        "profileUrl,firstName,lastName,fullName,title,connectionSince,profileImageUrl,timestamp\n"
+        "https://www.linkedin.com/in/salesperson/,Sales,Person,Sales Person,Senior Sales Consultant,2026-03-01T00:00:00.000Z,,1709251200\n"
+    ))
+    @patch("app.phantombuster_webhook.fetch_agent_info", return_value={
+        "s3Folder": "folder-1", "orgS3Folder": "org-1",
+    })
+    def test_filters_sales_profiles_before_upsert(self, _mock_info, _mock_csv, mock_db):
+        result = handle_connections_result(CONNECTIONS_PAYLOAD)
+
+        assert result["new_ids"] == []
+        assert result["skipped"] == 0
+        assert result["filtered"] == 1
+        mock_db.upsert_outreach_connection.assert_not_called()
+
 
 class TestProcessWebhookRouting:
     @patch("app.phantombuster_webhook.PB_CONNECTIONS_AGENT_ID", "conn-agent-123")
