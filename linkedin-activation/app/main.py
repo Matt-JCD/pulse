@@ -26,7 +26,7 @@ from app.config import (
 )
 from app.detection_launcher import launch_detection
 from app.drafter import draft_all_detected
-from app.phantombuster import expected_webhook_url, validate_webhook_secret
+from app.phantombuster import expected_webhook_url, launch_message_sender, validate_webhook_secret
 from app.phantombuster_webhook import process_pb_webhook
 from app.send_launcher import launch_approved_sends
 from app.slack_bot import (
@@ -146,6 +146,37 @@ async def launch_approved_sends_job():
     supabase = db.get_db()
     result = await asyncio.to_thread(launch_approved_sends, supabase)
     return result
+
+
+@app.post("/jobs/send-simon-test")
+async def send_simon_test_job():
+    """
+    Temporary operator endpoint.
+    Draft and send a message to Simon Russell entirely server-side using live env vars.
+    """
+    from app.drafter import generate_outreach_draft
+    from app.linkdapi import enrich_profile
+
+    profile_url = "https://www.linkedin.com/in/simonrussell/"
+    research = await asyncio.to_thread(enrich_profile, "simonrussell")
+    profile = research.get("profile") or {}
+    row = {
+        "full_name": " ".join(part for part in [profile.get("firstName"), profile.get("lastName")] if part).strip() or "Simon Russell",
+        "first_name": profile.get("firstName") or "Simon",
+        "last_name": profile.get("lastName") or "Russell",
+        "headline": profile.get("headline") or "",
+        "linkedin_profile_url": profile_url,
+        "public_identifier": "simonrussell",
+        "research": research,
+    }
+    draft_text = await asyncio.to_thread(generate_outreach_draft, row)
+    result = await asyncio.to_thread(launch_message_sender, profile_url, draft_text)
+    return {
+        "status": "launched",
+        "profile_url": profile_url,
+        "draft_message": draft_text,
+        **result,
+    }
 
 
 # ---------------------------------------------------------------------------
