@@ -71,15 +71,7 @@ def verify_slack_signature(body: bytes, timestamp: str, signature: str) -> bool:
 
 @app.get("/health")
 async def health():
-    try:
-        return {
-            "status": "ok",
-            "last_run": await asyncio.to_thread(db.get_last_run_timestamp),
-            "connections_tracked": await asyncio.to_thread(db.get_total_count),
-            "connections_sent": await asyncio.to_thread(db.get_sent_count),
-        }
-    except Exception as e:
-        return {"status": "ok", "db_error": str(e)}
+    return {"status": "ok"}
 
 
 @app.get("/connections")
