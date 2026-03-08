@@ -205,6 +205,21 @@ def get_outreach(outreach_id: str) -> Optional[dict]:
     return resp.data
 
 
+def get_outreach_by_profile_url(profile_url: str) -> Optional[dict]:
+    """Fetch a single outreach row by LinkedIn profile URL."""
+    resp = (
+        get_db()
+        .table(OUTREACH_TABLE)
+        .select("*")
+        .eq("linkedin_profile_url", profile_url)
+        .limit(1)
+        .execute()
+    )
+    if resp.data:
+        return resp.data[0]
+    return None
+
+
 def get_outreach_by_container_id(container_id: str) -> Optional[dict]:
     """Find an outreach row by its pb_send_container_id."""
     resp = (
@@ -295,7 +310,7 @@ def get_recent_failures(limit: int = 10) -> list[dict]:
     return (
         get_db()
         .table(OUTREACH_TABLE)
-        .select("id, full_name, last_error, retry_count, updated_at")
+        .select("id, full_name, linkedin_profile_url, last_error, retry_count, updated_at")
         .eq("status", "send_failed")
         .order("updated_at", desc=True)
         .limit(limit)

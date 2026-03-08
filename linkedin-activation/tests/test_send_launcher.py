@@ -290,3 +290,56 @@ class TestRetryEndpoint:
 
         assert data["status"] == "ok"
         mock_transition.assert_called_once_with(mock_get_db.return_value, "r1", "approved")
+
+    @patch("app.main.ADMIN_API_KEY", "admin-secret")
+    @patch("app.db.get_recent_failures")
+    def test_admin_failures_endpoint_returns_rows(self, mock_failures):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        mock_failures.return_value = [
+            {
+                "id": "r1",
+                "full_name": "Berowne",
+                "linkedin_profile_url": "https://www.linkedin.com/in/berowne/",
+                "last_error": "Couldn't type in chat widget",
+                "retry_count": 1,
+                "updated_at": "2026-03-08T02:21:52Z",
+            }
+        ]
+        client = TestClient(app)
+
+        resp = client.get("/admin/outreach/failures?limit=5", headers={"x-api-key": "admin-secret"})
+        data = resp.json()
+
+        assert resp.status_code == 200
+        assert data["limit"] == 5
+        assert data["failures"][0]["linkedin_profile_url"] == "https://www.linkedin.com/in/berowne/"
+
+    @patch("app.main.ADMIN_API_KEY", "admin-secret")
+    @patch("app.state_machine.transition_status")
+    @patch("app.db.get_db")
+    @patch("app.db.get_outreach_by_profile_url")
+    def test_admin_retry_by_profile_url(self, mock_get, mock_get_db, mock_transition):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        mock_get.return_value = {
+            "id": "r1",
+            "status": "send_failed",
+            "retry_count": 1,
+            "linkedin_profile_url": "https://www.linkedin.com/in/berowne/",
+        }
+        mock_get_db.return_value = MagicMock()
+        client = TestClient(app)
+
+        resp = client.post(
+            "/admin/outreach/retry-send?profile_url=https://www.linkedin.com/in/berowne/",
+            headers={"x-api-key": "admin-secret"},
+        )
+        data = resp.json()
+
+        assert resp.status_code == 200
+        assert data["status"] == "ok"
+        assert data["outreach_id"] == "r1"
+        mock_transition.assert_called_once_with(mock_get_db.return_value, "r1", "approved")

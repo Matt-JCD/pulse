@@ -170,6 +170,34 @@ async def retry_outreach_send(outreach_id: str):
     return {"status": "ok", "outreach_id": outreach_id}
 
 
+@app.post("/admin/outreach/retry-send", dependencies=[Depends(verify_admin_key)])
+async def admin_retry_outreach_send(profile_url: str = Query(..., alias="profile_url")):
+    """Retry a failed send by LinkedIn profile URL for operator convenience."""
+    from app.state_machine import transition_status
+
+    row = await asyncio.to_thread(db.get_outreach_by_profile_url, profile_url)
+    if not row:
+        return {"status": "error", "error": "Outreach not found", "profile_url": profile_url}
+    if row["status"] != "send_failed":
+        return {
+            "status": "error",
+            "error": f"Cannot retry - status is {row['status']}, not send_failed",
+            "outreach_id": row["id"],
+            "profile_url": profile_url,
+        }
+    if (row.get("retry_count") or 0) >= 3:
+        return {
+            "status": "error",
+            "error": "Max retries (3) reached",
+            "outreach_id": row["id"],
+            "profile_url": profile_url,
+        }
+
+    supabase = db.get_db()
+    await asyncio.to_thread(transition_status, supabase, row["id"], "approved")
+    return {"status": "ok", "outreach_id": row["id"], "profile_url": profile_url}
+
+
 # ---------------------------------------------------------------------------
 # PhantomBuster webhook
 # ---------------------------------------------------------------------------
@@ -218,6 +246,13 @@ async def outreach_config():
         "pb_webhook_secret_configured": bool(webhook_url),
         "expected_webhook_url": webhook_url or None,
     }
+
+
+@app.get("/admin/outreach/failures", dependencies=[Depends(verify_admin_key)])
+async def outreach_failures(limit: int = Query(10, ge=1, le=100)):
+    """Recent failed outreach sends with enough metadata for targeted retries."""
+    failures = await asyncio.to_thread(db.get_recent_failures, limit)
+    return {"failures": failures, "limit": limit}
 
 
 @app.post("/admin/attio/sync-connections", dependencies=[Depends(verify_admin_key)])
