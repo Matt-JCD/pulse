@@ -247,12 +247,11 @@ def build_outreach_edit_modal(outreach_id: str, current_draft: str) -> dict:
             {
                 "type": "input",
                 "block_id": "outreach_draft_block",
-                "label": {"type": "plain_text", "text": "Message (max 300 chars)"},
+                "label": {"type": "plain_text", "text": "Message"},
                 "element": {
                     "type": "plain_text_input",
                     "action_id": "outreach_draft_input",
                     "initial_value": current_draft,
-                    "max_length": 300,
                     "multiline": True,
                 },
             }

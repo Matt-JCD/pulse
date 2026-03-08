@@ -69,7 +69,7 @@ class TestBuildOutreachEditModal:
         assert modal["callback_id"] == "outreach_edit_modal"
         assert modal["private_metadata"] == "outreach-1"
         assert modal["blocks"][0]["element"]["initial_value"] == "Draft text here"
-        assert modal["blocks"][0]["element"]["max_length"] == 300
+        assert "max_length" not in modal["blocks"][0]["element"]
 
 
 # ---------------------------------------------------------------------------
