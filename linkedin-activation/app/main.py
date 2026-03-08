@@ -178,6 +178,25 @@ async def reset_outreach_job():
     return {"status": "ok", "deleted": deleted}
 
 
+@app.get("/jobs/outreach-import-summary")
+async def outreach_import_summary(seen_count: Optional[int] = Query(None, ge=0)):
+    """
+    Temporary operator endpoint.
+    Summarize linkedin_outreach after a fresh import and estimate filtered rows.
+    """
+    status_counts = await asyncio.to_thread(db.get_outreach_status_counts)
+    total_outreach = sum(status_counts.values())
+    response = {
+        "status": "ok",
+        "total_outreach": total_outreach,
+        "status_counts": status_counts,
+    }
+    if seen_count is not None:
+        response["seen_count"] = seen_count
+        response["estimated_filtered"] = max(seen_count - total_outreach, 0)
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------
