@@ -58,3 +58,40 @@ class TestClearSlackCardsEndpoint:
         mock_get_rows.assert_any_call("awaiting_review", 10)
         mock_get_rows.assert_any_call("approved", 10)
         mock_update.assert_called_once_with("r1", {"slack_message_ts": None, "slack_channel": None})
+
+
+class TestPurgeOutreachSlackCardsEndpoint:
+    @patch("app.main.OUTREACH_SLACK_CHANNEL", "C-outreach")
+    @patch("app.main.SLACK_BOT_TOKEN", "xoxb-test")
+    @patch("app.main.WebClient")
+    def test_purges_recent_outreach_cards_from_slack_history(self, mock_webclient_cls):
+        mock_slack = mock_webclient_cls.return_value
+        mock_slack.conversations_history.return_value = {
+            "messages": [
+                {
+                    "ts": "1.1",
+                    "blocks": [
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {"action_id": "outreach_approve"},
+                                {"action_id": "outreach_edit"},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "ts": "2.2",
+                    "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "ignore"}}],
+                },
+            ]
+        }
+        client = TestClient(app)
+
+        resp = client.post("/jobs/purge-outreach-slack-cards?limit=20")
+        data = resp.json()
+
+        assert resp.status_code == 200
+        assert data == {"status": "ok", "deleted": 1, "skipped": 0, "scanned": 2, "limit": 20}
+        mock_slack.conversations_history.assert_called_once()
+        mock_slack.chat_delete.assert_called_once()

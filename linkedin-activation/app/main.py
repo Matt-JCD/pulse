@@ -18,6 +18,7 @@ from app.config import (
     ADMIN_API_KEY,
     APP_BASE_URL,
     DAILY_SEND_LIMIT,
+    OUTREACH_SLACK_CHANNEL,
     PB_CONNECTIONS_AGENT_ID,
     PB_MESSAGE_SENDER_AGENT_ID,
     SLACK_BOT_TOKEN,
@@ -290,6 +291,51 @@ async def clear_slack_cards(
         "status_counts": status_counts,
         "limit": limit,
     }
+
+
+@app.post("/jobs/purge-outreach-slack-cards")
+async def purge_outreach_slack_cards(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Delete recent outreach approval cards directly from Slack channel history, even if DB links are gone.
+    """
+    if not SLACK_BOT_TOKEN or not OUTREACH_SLACK_CHANNEL:
+        return {"status": "error", "error": "Slack outreach channel not configured"}
+
+    slack = WebClient(token=SLACK_BOT_TOKEN)
+    resp = await asyncio.to_thread(
+        slack.conversations_history,
+        channel=OUTREACH_SLACK_CHANNEL,
+        limit=limit,
+    )
+
+    deleted = 0
+    skipped = 0
+    scanned = 0
+    action_ids = {"outreach_approve", "outreach_edit", "outreach_reject"}
+
+    for message in resp.get("messages", []):
+        scanned += 1
+        blocks = message.get("blocks") or []
+        has_outreach_actions = any(
+            block.get("type") == "actions"
+            and any(element.get("action_id") in action_ids for element in block.get("elements", []))
+            for block in blocks
+        )
+        if not has_outreach_actions:
+            continue
+        try:
+            await asyncio.to_thread(
+                slack.chat_delete,
+                channel=OUTREACH_SLACK_CHANNEL,
+                ts=message["ts"],
+            )
+            deleted += 1
+        except Exception:
+            logger.exception("Slack outreach message purge failed for ts=%s", message.get("ts"))
+            skipped += 1
+
+    return {"status": "ok", "deleted": deleted, "skipped": skipped, "scanned": scanned, "limit": limit}
 
 
 @app.post("/jobs/requeue-awaiting-review")
