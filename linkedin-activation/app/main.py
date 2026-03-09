@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 
 from app import db
 from app.attio_sync import sync_all_unsynced
@@ -303,11 +304,19 @@ async def purge_outreach_slack_cards(limit: int = Query(500, ge=1, le=1000)):
         return {"status": "error", "error": "Slack outreach channel not configured"}
 
     slack = WebClient(token=SLACK_BOT_TOKEN)
-    resp = await asyncio.to_thread(
-        slack.conversations_history,
-        channel=OUTREACH_SLACK_CHANNEL,
-        limit=limit,
-    )
+    try:
+        resp = await asyncio.to_thread(
+            slack.conversations_history,
+            channel=OUTREACH_SLACK_CHANNEL,
+            limit=limit,
+        )
+    except SlackApiError as exc:
+        error = exc.response.get("error", "slack_api_error")
+        logger.exception("Slack outreach history fetch failed")
+        return {"status": "error", "error": error}
+    except Exception:
+        logger.exception("Slack outreach history fetch crashed")
+        return {"status": "error", "error": "history_fetch_failed"}
 
     deleted = 0
     skipped = 0
@@ -331,6 +340,9 @@ async def purge_outreach_slack_cards(limit: int = Query(500, ge=1, le=1000)):
                 ts=message["ts"],
             )
             deleted += 1
+        except SlackApiError as exc:
+            logger.exception("Slack outreach message purge failed for ts=%s", message.get("ts"))
+            skipped += 1
         except Exception:
             logger.exception("Slack outreach message purge failed for ts=%s", message.get("ts"))
             skipped += 1

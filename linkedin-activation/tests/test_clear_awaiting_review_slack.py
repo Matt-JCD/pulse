@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from slack_sdk.errors import SlackApiError
 
 from app.main import app
 
@@ -95,3 +96,20 @@ class TestPurgeOutreachSlackCardsEndpoint:
         assert data == {"status": "ok", "deleted": 1, "skipped": 0, "scanned": 2, "limit": 20}
         mock_slack.conversations_history.assert_called_once()
         mock_slack.chat_delete.assert_called_once()
+
+    @patch("app.main.OUTREACH_SLACK_CHANNEL", "C-outreach")
+    @patch("app.main.SLACK_BOT_TOKEN", "xoxb-test")
+    @patch("app.main.WebClient")
+    def test_returns_explicit_slack_error_when_history_fetch_fails(self, mock_webclient_cls):
+        mock_slack = mock_webclient_cls.return_value
+        mock_slack.conversations_history.side_effect = SlackApiError(
+            message="boom",
+            response={"error": "missing_scope"},
+        )
+        client = TestClient(app)
+
+        resp = client.post("/jobs/purge-outreach-slack-cards?limit=20")
+        data = resp.json()
+
+        assert resp.status_code == 200
+        assert data == {"status": "error", "error": "missing_scope"}
