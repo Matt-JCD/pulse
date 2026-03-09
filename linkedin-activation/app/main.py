@@ -372,6 +372,30 @@ async def requeue_awaiting_review(limit: int = Query(500, ge=1, le=1000)):
     return {"status": "ok", "requeued": reset, "limit": limit}
 
 
+@app.post("/jobs/requeue-approved")
+async def requeue_approved(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Move approved rows back to detected and clear approval-specific fields.
+    """
+    rows = await asyncio.to_thread(db.get_outreach_by_status, "approved", limit)
+    reset = 0
+    for row in rows:
+        await asyncio.to_thread(
+            db.update_outreach,
+            row["id"],
+            {
+                "status": "detected",
+                "approved_message": None,
+                "approved_at": None,
+                "slack_message_ts": None,
+                "slack_channel": None,
+            },
+        )
+        reset += 1
+    return {"status": "ok", "requeued": reset, "limit": limit}
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------
