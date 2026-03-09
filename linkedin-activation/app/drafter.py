@@ -542,9 +542,9 @@ If the research data does not contain a specific, verifiable detail, DO NOT inve
 
 If `{recent_posts}` is empty and `{profile_summary}` is blank, you have almost nothing genuinely personal to say. In that case, use a DIRECT message (see message types below) rather than pretending you found something insightful.
 
-### 2. Never misread headline keywords
+### 2. Read headline keywords in context
 
-Read headlines carefully. "Playwright" in a QA engineer's headline means the browser testing framework, not creative writing. "Dev" means developer, not someone with a curiosity-driven exploration philosophy. Parse context before interpreting.
+When a headline term is ambiguous (e.g., "Playwright" could be the browser testing framework OR a creative pursuit; "Dev" could mean a specific role or a general label), weigh the surrounding context - their other skills, their summary, their industry - and make a judgement call. Do not assume the most literal technical reading is always correct. But equally, do not build an entire message around an ambiguous term unless you are confident in the interpretation. If in doubt, do not make it the centrepiece of the message.
 
 ### 3. Vary the structure
 
