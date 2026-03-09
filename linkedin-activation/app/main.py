@@ -372,6 +372,34 @@ async def requeue_awaiting_review(limit: int = Query(500, ge=1, le=1000)):
     return {"status": "ok", "requeued": reset, "limit": limit}
 
 
+@app.post("/jobs/delete-awaiting-review")
+async def delete_awaiting_review(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Delete awaiting_review rows and remove their Slack approval cards.
+    """
+    rows = await asyncio.to_thread(db.get_outreach_by_status, "awaiting_review", limit)
+    deleted = 0
+    slack_deleted = 0
+    slack_skipped = 0
+    table = db.get_db().table("linkedin_outreach")
+    for row in rows:
+        removed = await asyncio.to_thread(delete_outreach_slack_message, row)
+        if removed:
+            slack_deleted += 1
+        else:
+            slack_skipped += 1
+        await asyncio.to_thread(table.delete().eq("id", row["id"]).execute)
+        deleted += 1
+    return {
+        "status": "ok",
+        "deleted": deleted,
+        "slack_deleted": slack_deleted,
+        "slack_skipped": slack_skipped,
+        "limit": limit,
+    }
+
+
 @app.post("/jobs/requeue-approved")
 async def requeue_approved(limit: int = Query(500, ge=1, le=1000)):
     """

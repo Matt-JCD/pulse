@@ -137,6 +137,12 @@ class TestGenerateOutreachDraft:
 
         assert len(result) == 500
 
+    def test_outreach_system_contains_new_prompt_markers(self):
+        assert "LinkedIn First Message Generation Prompt" in OUTREACH_SYSTEM
+        assert "Do not ask permission for a conversation." in OUTREACH_SYSTEM
+        assert "The message must be:" in OUTREACH_SYSTEM
+        assert "two or three paragraphs" in OUTREACH_SYSTEM
+
 
 # ---------------------------------------------------------------------------
 # draft_and_update_outreach

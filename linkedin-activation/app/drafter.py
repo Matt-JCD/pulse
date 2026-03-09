@@ -251,6 +251,28 @@ How did your team address this when it emerged?
 
 What did this look like internally?
 
+Length Constraint
+
+The message must be:
+
+two or three paragraphs
+
+concise
+
+free of filler
+
+Each paragraph should contain one or two sentences only.
+
+Example Output
+
+Hey Jon - thank you for connecting. I saw your CDAO session on artificial intelligence adoption in insurance.
+
+One pattern appearing across banks is that once artificial intelligence moves beyond pilots and touches risk or customer decisions, ownership between governance, security and delivery becomes complicated. This issue appears repeatedly in discussions with several institutions.
+
+How did this unfold inside CBA?
+
+Matt
+
 Final Instruction
 
 The message must read as communication between two experienced professionals in the same industry.
@@ -323,6 +345,7 @@ Rules:
 - End with a direct competence-assumption question
 - End the message with "Matt"
 - Do not use contractions
+- Keep it to two or three short paragraphs, with one or two sentences per paragraph
 - Do not ask permission for a conversation
 - Do not pitch a product
 - Output only the final message
