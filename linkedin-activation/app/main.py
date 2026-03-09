@@ -424,6 +424,58 @@ async def requeue_approved(limit: int = Query(500, ge=1, le=1000)):
     return {"status": "ok", "requeued": reset, "limit": limit}
 
 
+@app.post("/jobs/requeue-rejected-outreach")
+async def requeue_rejected_outreach(full_name: str = Query(..., min_length=1)):
+    """Temporary operator endpoint. Move exactly one rejected outreach row back to detected."""
+    rows = await asyncio.to_thread(db.get_outreach_by_full_name, full_name, "rejected", 10)
+    if not rows:
+        return {"status": "error", "error": "No rejected outreach found", "full_name": full_name}
+    if len(rows) > 1:
+        return {"status": "error", "error": f"Multiple rejected outreach rows found ({len(rows)})", "full_name": full_name}
+
+    row = rows[0]
+    await asyncio.to_thread(
+        db.update_outreach,
+        row["id"],
+        {
+            "status": "detected",
+            "slack_message_ts": None,
+            "slack_channel": None,
+            "approved_message": None,
+            "approved_at": None,
+            "last_error": None,
+        },
+    )
+    return {"status": "ok", "outreach_id": row["id"], "full_name": full_name}
+
+
+@app.post("/jobs/undo-sent-outreach")
+async def undo_sent_outreach(full_name: str = Query(..., min_length=1)):
+    """Temporary operator endpoint. Move exactly one sent outreach row back to detected."""
+    rows = await asyncio.to_thread(db.get_outreach_by_full_name, full_name, "sent", 10)
+    if not rows:
+        return {"status": "error", "error": "No sent outreach found", "full_name": full_name}
+    if len(rows) > 1:
+        return {"status": "error", "error": f"Multiple sent outreach rows found ({len(rows)})", "full_name": full_name}
+
+    row = rows[0]
+    await asyncio.to_thread(
+        db.update_outreach,
+        row["id"],
+        {
+            "status": "detected",
+            "sent_at": None,
+            "pb_send_container_id": None,
+            "approved_message": None,
+            "approved_at": None,
+            "slack_message_ts": None,
+            "slack_channel": None,
+            "last_error": None,
+        },
+    )
+    return {"status": "ok", "outreach_id": row["id"], "full_name": full_name}
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------
