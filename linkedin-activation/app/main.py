@@ -31,7 +31,7 @@ from app.phantombuster_webhook import process_pb_webhook
 from app.send_launcher import launch_approved_sends
 from app.slack_bot import (
     handle_outreach_approve, handle_outreach_edit, handle_outreach_edit_submit,
-    handle_outreach_reject,
+    handle_outreach_reject, delete_outreach_slack_message,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -133,10 +133,10 @@ async def enrich_and_redraft_job(
 
 
 @app.post("/jobs/launch-approved-sends")
-async def launch_approved_sends_job():
+async def launch_approved_sends_job(limit: Optional[int] = Query(None, ge=1, le=50)):
     """Cron-triggered. Launches PB message sender for approved outreach rows."""
     supabase = db.get_db()
-    result = await asyncio.to_thread(launch_approved_sends, supabase)
+    result = await asyncio.to_thread(launch_approved_sends, supabase, limit)
     return result
 
 
@@ -210,6 +210,24 @@ async def reject_approved_outreach(full_name: str = Query(..., min_length=1)):
     row = rows[0]
     await asyncio.to_thread(handle_outreach_reject, supabase, row["id"])
     return {"status": "ok", "outreach_id": row["id"], "full_name": full_name}
+
+
+@app.post("/jobs/clear-awaiting-review-slack")
+async def clear_awaiting_review_slack(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Delete Slack approval cards for awaiting_review rows without changing Supabase status.
+    """
+    rows = await asyncio.to_thread(db.get_outreach_by_status, "awaiting_review", limit)
+    cleared = 0
+    skipped = 0
+    for row in rows:
+        deleted = await asyncio.to_thread(delete_outreach_slack_message, row)
+        if deleted:
+            cleared += 1
+        else:
+            skipped += 1
+    return {"status": "ok", "cleared": cleared, "skipped": skipped, "limit": limit}
 
 
 # ---------------------------------------------------------------------------

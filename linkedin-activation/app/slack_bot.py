@@ -300,6 +300,25 @@ def update_outreach_slack_message(supabase_client: Client, outreach_row: dict, s
         logger.exception("Slack outreach message update failed for %s", outreach_row.get("id"))
 
 
+def delete_outreach_slack_message(outreach_row: dict) -> bool:
+    """Delete an outreach Slack card without changing DB workflow state."""
+    if not SLACK_BOT_TOKEN or not outreach_row.get("slack_message_ts"):
+        return False
+
+    channel = outreach_row.get("slack_channel") or OUTREACH_SLACK_CHANNEL
+    if not channel:
+        return False
+
+    try:
+        slack = WebClient(token=SLACK_BOT_TOKEN)
+        slack.chat_delete(channel=channel, ts=outreach_row["slack_message_ts"])
+        logger.info("[outreach:slack] Deleted approval card for %s", outreach_row.get("id"))
+        return True
+    except Exception:
+        logger.exception("Slack outreach message delete failed for %s", outreach_row.get("id"))
+        return False
+
+
 def handle_outreach_approve(supabase_client: Client, outreach_id: str) -> None:
     """Approve outreach: set approved_message, approved_at, transition to approved."""
     row = db.get_outreach(outreach_id)

@@ -1,5 +1,6 @@
 param(
     [string]$BaseUrl = "https://pulse-by-prefactor-1.onrender.com",
+    [int]$BatchSize = 1,
     [int]$PauseSeconds = 90,
     [int]$MaxRuns = 0
 )
@@ -15,7 +16,7 @@ while ($true) {
     }
 
     $run += 1
-    $url = "$BaseUrl/jobs/launch-approved-sends"
+    $url = "$BaseUrl/jobs/launch-approved-sends?limit=$BatchSize"
     $response = Invoke-RestMethod -Method Post -Uri $url
     $launched = [int]($response.launched | ForEach-Object { $_ })
     $errors = @($response.errors)
@@ -33,4 +34,3 @@ while ($true) {
 
     Start-Sleep -Seconds $PauseSeconds
 }
-

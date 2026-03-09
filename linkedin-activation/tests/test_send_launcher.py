@@ -86,6 +86,20 @@ class TestLaunchApprovedSends:
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
     @patch("app.send_launcher.launch_message_sender")
+    def test_respects_explicit_launch_limit(self, mock_launch, mock_db, _mock_transition, _sleep):
+        mock_db.get_sent_today_count.return_value = 0
+        mock_db.get_approved_outreach.return_value = [_make_row("r1")]
+        mock_launch.return_value = {"containerId": "c-1"}
+        supabase = MagicMock()
+
+        launch_approved_sends(supabase, limit=1)
+
+        mock_db.get_approved_outreach.assert_called_once_with(limit=1)
+
+    @patch("app.send_launcher.time.sleep")
+    @patch("app.send_launcher.transition_status")
+    @patch("app.send_launcher.db")
+    @patch("app.send_launcher.launch_message_sender")
     def test_oldest_approved_first(self, mock_launch, mock_db, _mock_transition, _sleep):
         """get_approved_outreach returns oldest first — send_launcher processes in that order."""
         mock_db.get_sent_today_count.return_value = 0
