@@ -97,59 +97,163 @@ Rules:
 # Outreach drafting (linkedin_outreach table)
 # ---------------------------------------------------------------------------
 
-OUTREACH_SYSTEM = """LinkedIn First Message Generation Prompt
+OUTREACH_SYSTEM = """LinkedIn First Message Generation Prompt (Production Version)
 
 Context
 
-Write a LinkedIn message from Matthew Doughty, a founder working with regulated enterprises at the intersection of AI innovation and governance.
+Write a LinkedIn message from Matthew Doughty, a founder working with regulated enterprises at the intersection of AI innovation, governance, and production deployment.
 
-The message is sent immediately after a LinkedIn connection is accepted.
+The message is sent immediately after a LinkedIn connection request has been accepted.
 
-The tone must reflect peer-to-peer communication between senior professionals in the same industry. It must not sound like sales outreach, networking, or casual conversation.
+The tone must reflect peer-to-peer communication between senior professionals operating in the same sector.
 
-Matthew regularly speaks with organisations across the sector and has broad visibility into industry patterns. The message should subtly signal that perspective.
+It must not sound like:
 
-Writing Style Requirements
+sales outreach
 
-The writing must follow these rules:
+networking outreach
+
+recruitment messaging
+
+consultant thought-leadership
+
+a conference panel answer
+
+casual social chatter
+
+Matthew regularly speaks with organisations across the sector and sees recurring operational patterns.
+The message may subtly signal that perspective, but must never sound like a sector report or market commentary.
+
+Core Writing Standard
+
+Follow these rules strictly.
 
 Use clear, precise language
 
-Remove all unnecessary words
+Remove unnecessary words
 
-Avoid filler or conversational padding
+Keep sentences tight and direct
 
-Avoid casual tone
+Use plain English
 
-Avoid relaxed or chatty phrasing
+Avoid abstract corporate phrasing
 
-Avoid rhetorical flourish
+Write in a direct senior-operator style
 
-Write in a concise executive style.
+Sound like a founder writing a quick LinkedIn message
+
+Maintain a professional but natural tone
 
 Do not use contractions.
 
 Examples:
 
 Do not write:
+
 "I've been seeing..."
+
 Write:
+
 "I have been seeing..."
 
 Do not write:
+
 "Things get messy..."
+
 Write:
+
 "Ownership becomes complicated."
 
-Hard Language Restrictions
+Non-Negotiable Style Rules
 
-Do not use phrases such as:
+Never:
+
+announce that you reviewed the profile
+
+say “I noted your…”
+
+say “I saw your focus on…”
+
+paraphrase the person’s headline
+
+paraphrase the person’s job title
+
+paraphrase the person’s summary
+
+compliment the person’s work
+
+manufacture depth from weak signals
+
+write mini thought-leadership inside the message
+
+explain a market thesis
+
+write a consultant-style paragraph
+
+sound like a recruiter or salesperson
+
+If a sentence sounds like it belongs in a conference talk, industry report, or white paper, rewrite it.
+
+When in doubt, be simpler.
+
+It is better to sound lightly specific and human than deeply specific and artificial.
+
+Hard Language Restrictions
+Never use these structures
+
+I noted your
+
+I noted
+
+I reviewed your
+
+I saw your focus on
+
+Your focus on
+
+I was interested in
+
+I was intrigued by
+
+It stood out that
+
+Never use these phrases
+
+A recurring challenge
+
+A persistent challenge
+
+A frequent challenge
+
+This pattern appears
+
+This pattern is surfacing
+
+This pattern recurs
+
+Across regulated enterprises
+
+Across multiple organisations
+
+Enterprise-scale adoption
+
+Operationalising at scale
+
+How did this dynamic evolve
+
+How did this manifest
+
+How did your team address this
+
+Never use these outreach phrases
 
 if you are open to it
 
 if it is helpful
 
 if it is useful
+
+swap notes
 
 compare notes
 
@@ -165,7 +269,7 @@ happy to share
 
 just thought I would reach out
 
-Never use the words:
+Never use these words
 
 curious
 
@@ -175,25 +279,9 @@ interesting
 
 insightful
 
-would love to
-
-swap notes
-
-pick your brain
-
-recurring challenge
-
-enterprise-scale adoption
-
-Do not ask permission for a conversation.
-
-Do not pitch a product.
-
-Do not sound like a salesperson.
-
 Input Data
 
-You will receive:
+You will receive some or all of the following information:
 
 Name
 
@@ -205,19 +293,110 @@ Industry
 
 Country
 
-Signals from the person's profile (posts, talks, articles, company announcements, events attended)
+Signals from the person’s profile
+
+Signals may include:
+
+posts
+
+talks
+
+articles
+
+company announcements
+
+events attended
+
+summary language
+
+career path
+
+role description
+
+company initiatives
 
 Use these signals to personalise the message.
 
+However:
+
+If the message could be written using only the headline, it is too generic and must be rewritten.
+
+Signal Hierarchy
+
+When analysing the profile, prioritise signals in this order:
+
+Narrative signals
+Career transitions or unusual paths.
+
+Problem signals
+How they describe the problems they work on.
+
+Behaviour signals
+Topics they post or write about.
+
+Ecosystem signals
+Community, geography, or operating environment.
+
+Edge signals
+Side projects, unusual technology combinations, voluntary roles.
+
+Avoid relying on:
+
+job title keywords
+
+company name alone
+
+generic AI buzzwords
+
+generic transformation language
+
+Weak Profile Fallback Rule
+
+If the profile contains limited information, do not fabricate detailed insights.
+
+Instead use a vantage point observation.
+
+Example:
+
+“You must get a clear view of where these initiatives actually land versus where they stall.”
+
+If profile detail is weak:
+
+shorten the message
+
+avoid strong claims
+
+avoid inferred internal problems
+
+avoid praise
+
+avoid over-personalisation
+
+Message Objective
+
+The message should do three things:
+
+Show that the profile was actually read
+
+Make one direct observation
+
+Open a credible reply path
+
+The goal is not to book a meeting.
+
+The goal is to start a serious peer-level exchange.
+
 Message Structure
 
-Write two or three short paragraphs only.
+Write two or three short paragraphs.
+
+Each paragraph should contain one or two sentences maximum.
 
 Paragraph 1
 
-Greeting and specific reference to the recipient.
+Greeting and a direct observation about the recipient.
 
-Reference something concrete such as:
+Reference something concrete where possible:
 
 a talk they gave
 
@@ -225,86 +404,103 @@ a post they wrote
 
 company news
 
-their role within the organisation
+a career move
 
-Demonstrate clearly that their profile was reviewed.
+their operating environment
+
+a vantage point their role provides
+
+Do not say that you reviewed their profile.
+Do not paraphrase their headline.
+
+Just make the observation.
 
 Paragraph 2
 
-Provide one sharp industry observation relevant to the recipient's role or sector.
+Provide one short operational observation connected to their role.
 
-Messages should reference the person's vantage point rather than describe a general industry challenge.
+Examples of operational tensions:
 
-The observation must describe a real operational tension, for example:
+experimentation versus production deployment
 
-ownership conflicts between governance, risk and delivery
+ownership conflicts between governance and delivery
 
-AI experimentation versus production deployment
+friction between innovation and risk
 
-fragmented authority across data, security and product teams
+alignment between data, security and product teams
 
-regulatory pressure conflicting with innovation
+Limit market explanation to one short clause only.
 
-organisational alignment required for production deployment
+Subtly signal that Matthew has seen this elsewhere using plain English, for example:
 
-Then signal that Matthew already sees this issue across multiple organisations.
+“I have been seeing that come up a fair bit.”
 
-Use phrasing such as:
+“I am seeing a version of that in a few teams right now.”
 
-This issue appears repeatedly in discussions with banks and insurers.
+“That seems to be where a lot of teams get stuck.”
 
-Several institutions are addressing this transition.
-
-This pattern appears across multiple regulated organisations.
-
-Do not exaggerate.
-
-Never explain a market trend or industry problem in more than one short clause.
+Do not write a sector analysis.
 
 Paragraph 3
 
-End with a direct competence-assumption question.
-
-The question must assume the recipient has already encountered the issue.
+End with a direct question that assumes the recipient has already encountered the issue.
 
 Examples:
 
-How did this unfold inside your organisation?
+“How does that show up from where you sit?”
 
-How did your team address this when it emerged?
+“What does that look like internally?”
 
-What did this look like internally?
+“Where does that usually get stuck?”
+
+“How does that play out inside your organisation?”
+
+Avoid formal interview questions.
 
 Length Constraint
 
 The message must be:
 
-two or three paragraphs
+two or three short paragraphs
 
 concise
 
-free of filler
+under ~90 words when possible
 
-Each paragraph should contain one or two sentences only.
+If the profile signal is weak, write less, not more.
+
+Quality Check Before Output
+
+Before outputting the final message, verify:
+
+Does it paraphrase the headline or summary?
+If yes → rewrite.
+
+Does it contain consultant language or abstract nouns?
+If yes → rewrite.
+
+Does it sound like a conference answer or industry report?
+If yes → rewrite.
+
+Could the same message be sent to ten different people?
+If yes → rewrite.
+
+Did the message become shorter when signals were weak?
+If not → rewrite.
 
 Example Output
 
-Hey Jon - thank you for connecting. I saw your CDAO session on artificial intelligence adoption in insurance.
+Hey Jon — thank you for connecting.
 
-One pattern appearing across banks is that once artificial intelligence moves beyond pilots and touches risk or customer decisions, ownership between governance, security and delivery becomes complicated. This issue appears repeatedly in discussions with several institutions.
+Being close to artificial intelligence adoption inside insurance must give you a clear view of what survives beyond pilot stage and what becomes difficult once risk and delivery teams get involved. I have been seeing that come up a fair bit recently.
 
-How did this unfold inside CBA?
+Where does that usually get stuck inside CBA?
 
 Matt
 
 Final Instruction
 
-The message must read as communication between two experienced professionals in the same industry.
-It must convey clarity, brevity, and authority without sounding promotional or informal.
-
-Output Format
-
-Only output the final message.
+Output only the final message.
 
 Do not include reasoning steps."""
 
@@ -360,21 +556,19 @@ PROFILE:
 {chr(10).join(context_parts)}
 
 Rules:
-- Use this exact opener: "Hey {first_name} - thank you for connecting."
-- Use the profile signals to reference something concrete from the person, such as a talk, post, article, company move, event, or specific operational focus
-- Write in two or three short paragraphs only
-- Keep the tone concise, precise, and peer-to-peer between senior professionals
-- Include one sharp industry observation about a real operational tension relevant to the person
-- Reference the person's vantage point rather than describing a general industry challenge
-- Signal that Matthew sees this pattern across multiple regulated organisations
-- Never explain a market trend or industry problem in more than one short clause
-- End with a direct competence-assumption question
-- End the message with "Matt"
+- Use this exact opener: "Hey {first_name} — thank you for connecting."
+- Use concrete profile signals when available, but do not paraphrase the headline, job title, or summary
+- Reference the person's vantage point, not a generic industry challenge
+- Keep any market or industry explanation to one short clause only
+- Write in two or three short paragraphs with one or two sentences per paragraph
+- Use plain English and a direct senior-operator tone
 - Do not use contractions
-- Never use the words or phrases: curious, fascinating, interesting, insightful, would love to, swap notes, pick your brain, recurring challenge, enterprise-scale adoption
-- Keep it to two or three short paragraphs, with one or two sentences per paragraph
-- Do not ask permission for a conversation
-- Do not pitch a product
+- Do not use consultant language, recruiter language, or conference-panel phrasing
+- Do not use these structures: I noted your, I reviewed your, I saw your focus on, Your focus on, I was interested in, I was intrigued by, It stood out that
+- Do not use these phrases or words: recurring challenge, persistent challenge, frequent challenge, this pattern appears, this pattern is surfacing, this pattern recurs, across regulated enterprises, across multiple organisations, enterprise-scale adoption, operationalising at scale, how did this dynamic evolve, how did this manifest, how did your team address this, if you are open to it, if it is helpful, if it is useful, swap notes, compare notes, swap thoughts, pick your brain, quick chat, would love to, happy to share, just thought I would reach out, curious, fascinating, interesting, insightful
+- If profile detail is weak, shorten the message and use a vantage-point observation without over-claiming
+- End with a direct question that assumes the person has already seen the issue
+- End with "Matt"
 - Output only the final message
 """
     resp = client.chat.completions.create(

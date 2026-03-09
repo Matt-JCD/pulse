@@ -138,14 +138,12 @@ class TestGenerateOutreachDraft:
         assert len(result) == 500
 
     def test_outreach_system_contains_new_prompt_markers(self):
-        assert "LinkedIn First Message Generation Prompt" in OUTREACH_SYSTEM
-        assert "Do not ask permission for a conversation." in OUTREACH_SYSTEM
-        assert "The message must be:" in OUTREACH_SYSTEM
-        assert "two or three paragraphs" in OUTREACH_SYSTEM
-        assert "Never explain a market trend or industry problem in more than one short clause." in OUTREACH_SYSTEM
-        assert "Messages should reference the person's vantage point" in OUTREACH_SYSTEM
-        assert "Never use the words:" in OUTREACH_SYSTEM
-        assert "enterprise-scale adoption" in OUTREACH_SYSTEM
+        assert "LinkedIn First Message Generation Prompt (Production Version)" in OUTREACH_SYSTEM
+        assert "The message is sent immediately after a LinkedIn connection request has been accepted." in OUTREACH_SYSTEM
+        assert "Never use these structures" in OUTREACH_SYSTEM
+        assert "Weak Profile Fallback Rule" in OUTREACH_SYSTEM
+        assert "under ~90 words when possible" in OUTREACH_SYSTEM
+        assert "Being close to artificial intelligence adoption inside insurance" in OUTREACH_SYSTEM
 
 
 # ---------------------------------------------------------------------------
