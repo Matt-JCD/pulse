@@ -329,6 +329,22 @@ async def sent_this_morning_full(limit: int = Query(500, ge=1, le=1000)):
     }
 
 
+@app.get("/jobs/rejected-outreach")
+async def rejected_outreach(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Return rejected linkedin_outreach rows so they can be reviewed and selectively requeued.
+    """
+    rows = await asyncio.to_thread(db.get_outreach_by_status, "rejected", limit)
+    for row in rows:
+        row["message"] = row.get("approved_message") or row.get("draft_message") or ""
+    return {
+        "status": "ok",
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
 @app.post("/jobs/reject-approved-outreach")
 async def reject_approved_outreach(full_name: str = Query(..., min_length=1)):
     """Temporary operator endpoint. Reject exactly one approved outreach row by full name."""
