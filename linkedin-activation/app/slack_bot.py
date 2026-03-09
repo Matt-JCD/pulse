@@ -81,12 +81,11 @@ def build_edit_modal(connection_id: str, current_draft: str) -> dict:
             {
                 "type": "input",
                 "block_id": "draft_block",
-                "label": {"type": "plain_text", "text": "Message (max 200 chars)"},
+                "label": {"type": "plain_text", "text": "Message"},
                 "element": {
                     "type": "plain_text_input",
                     "action_id": "draft_input",
                     "initial_value": current_draft,
-                    "max_length": 200,
                     "multiline": True,
                 },
             }

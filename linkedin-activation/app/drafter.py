@@ -72,7 +72,6 @@ PROFILE:
 {chr(10).join(context_parts)}
 
 Rules:
-- Max 200 characters (this is HARD limit - count carefully)
 - Reference ONE specific thing: a post they wrote, their company's product, or a concrete detail
 - If they've posted about AI/agents/MCP/LLMs, ALWAYS reference that post specifically
 - No "I saw your post" or "I noticed" - just dive straight into the substance
@@ -218,7 +217,6 @@ Writing Constraints
 
 Message must:
 - be 3-5 sentences
-- be under 90 words
 - feel natural and conversational
 - avoid corporate language
 - avoid buzzwords
@@ -321,7 +319,7 @@ Rules:
 - Bridge lightly to Matthew's work or perspective without sounding like a pitch
 - Use a casual close that feels natural for the context
 - End with "Matt"
-- Keep it to 3-5 sentences and under 90 words
+- Keep it to 3-5 sentences
 - Output only the final message
 """
     resp = client.chat.completions.create(
