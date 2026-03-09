@@ -332,6 +332,20 @@ def get_recent_failures(limit: int = 10) -> list[dict]:
     ).data
 
 
+def get_outreach_sent_since(sent_after_iso: str, limit: int = 500) -> list[dict]:
+    """Fetch outreach rows sent at or after the given UTC ISO timestamp."""
+    return (
+        get_db()
+        .table(OUTREACH_TABLE)
+        .select("id, full_name, linkedin_profile_url, approved_message, draft_message, sent_at, pb_send_container_id")
+        .eq("status", "sent")
+        .gte("sent_at", sent_after_iso)
+        .order("sent_at", desc=False)
+        .limit(limit)
+        .execute()
+    ).data
+
+
 def get_outreach_attio_stats() -> dict:
     """Return counts for synced vs unsynced outreach rows and last sync time."""
     all_rows = get_db().table(OUTREACH_TABLE).select("attio_synced_at").execute()

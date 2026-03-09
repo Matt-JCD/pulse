@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response
@@ -195,6 +196,29 @@ async def outreach_import_summary(seen_count: Optional[int] = Query(None, ge=0))
         response["seen_count"] = seen_count
         response["estimated_filtered"] = max(seen_count - total_outreach, 0)
     return response
+
+
+@app.get("/jobs/sent-this-morning")
+async def sent_this_morning(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    List outreach rows sent since local Sydney midnight so they can be manually reviewed.
+    """
+    sydney = timezone(timedelta(hours=11))
+    local_now = datetime.now(sydney)
+    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    utc_start = local_midnight.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    rows = await asyncio.to_thread(db.get_outreach_sent_since, utc_start, limit)
+    for row in rows:
+        row["message"] = row.get("approved_message") or row.get("draft_message") or ""
+    return {
+        "status": "ok",
+        "timezone": "Australia/Sydney",
+        "local_date": local_midnight.date().isoformat(),
+        "sent_after_utc": utc_start,
+        "count": len(rows),
+        "rows": rows,
+    }
 
 
 @app.post("/jobs/reject-approved-outreach")
