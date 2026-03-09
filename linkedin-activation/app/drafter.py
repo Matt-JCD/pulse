@@ -165,6 +165,26 @@ happy to share
 
 just thought I would reach out
 
+Never use the words:
+
+curious
+
+fascinating
+
+interesting
+
+insightful
+
+would love to
+
+swap notes
+
+pick your brain
+
+recurring challenge
+
+enterprise-scale adoption
+
 Do not ask permission for a conversation.
 
 Do not pitch a product.
@@ -351,6 +371,7 @@ Rules:
 - End with a direct competence-assumption question
 - End the message with "Matt"
 - Do not use contractions
+- Never use the words or phrases: curious, fascinating, interesting, insightful, would love to, swap notes, pick your brain, recurring challenge, enterprise-scale adoption
 - Keep it to two or three short paragraphs, with one or two sentences per paragraph
 - Do not ask permission for a conversation
 - Do not pitch a product

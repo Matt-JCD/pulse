@@ -144,6 +144,8 @@ class TestGenerateOutreachDraft:
         assert "two or three paragraphs" in OUTREACH_SYSTEM
         assert "Never explain a market trend or industry problem in more than one short clause." in OUTREACH_SYSTEM
         assert "Messages should reference the person's vantage point" in OUTREACH_SYSTEM
+        assert "Never use the words:" in OUTREACH_SYSTEM
+        assert "enterprise-scale adoption" in OUTREACH_SYSTEM
 
 
 # ---------------------------------------------------------------------------
