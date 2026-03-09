@@ -220,6 +220,20 @@ def get_outreach_by_profile_url(profile_url: str) -> Optional[dict]:
     return None
 
 
+def get_outreach_by_full_name(full_name: str, status: str | None = None, limit: int = 10) -> list[dict]:
+    """Fetch outreach rows by full name, optionally filtered by status."""
+    q = (
+        get_db()
+        .table(OUTREACH_TABLE)
+        .select("*")
+        .eq("full_name", full_name)
+        .limit(limit)
+    )
+    if status:
+        q = q.eq("status", status)
+    return q.execute().data
+
+
 def get_outreach_by_container_id(container_id: str) -> Optional[dict]:
     """Find an outreach row by its pb_send_container_id."""
     resp = (

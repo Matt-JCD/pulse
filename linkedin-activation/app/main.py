@@ -197,6 +197,21 @@ async def outreach_import_summary(seen_count: Optional[int] = Query(None, ge=0))
     return response
 
 
+@app.post("/jobs/reject-approved-outreach")
+async def reject_approved_outreach(full_name: str = Query(..., min_length=1)):
+    """Temporary operator endpoint. Reject exactly one approved outreach row by full name."""
+    rows = await asyncio.to_thread(db.get_outreach_by_full_name, full_name, "approved", 10)
+    if not rows:
+        return {"status": "error", "error": "No approved outreach found", "full_name": full_name}
+    if len(rows) > 1:
+        return {"status": "error", "error": f"Multiple approved outreach rows found ({len(rows)})", "full_name": full_name}
+
+    supabase = db.get_db()
+    row = rows[0]
+    await asyncio.to_thread(handle_outreach_reject, supabase, row["id"])
+    return {"status": "ok", "outreach_id": row["id"], "full_name": full_name}
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------

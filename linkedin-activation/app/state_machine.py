@@ -8,7 +8,7 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
     "detected": ["drafted"],
     "drafted": ["awaiting_review"],
     "awaiting_review": ["approved", "rejected"],
-    "approved": ["send_queued"],
+    "approved": ["send_queued", "rejected"],
     "send_queued": ["sending", "sent", "send_failed"],
     "sending": ["sent", "send_failed"],
     "send_failed": ["approved"],
