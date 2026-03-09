@@ -6,6 +6,7 @@ import { twitterCollector } from '../../agents/twitterCollector.js';
 import { synthesizer } from '../../agents/synthesizer.js';
 import { autoDraftDailyPosts } from '../../composer/drafting.js';
 import { refreshEngagement } from '../../scheduler/engagement.js';
+import { sendDailyDigest, sendNudge } from '../../composer/slack.js';
 
 const router = Router();
 
@@ -17,6 +18,8 @@ const PIPELINE_FUNCTIONS: Record<string, () => Promise<unknown>> = {
   'synthesizer': () => synthesizer(),
   'composer-auto-draft': () => autoDraftDailyPosts(),
   'engagement-refresh': () => refreshEngagement(),
+  'slack-digest': () => sendDailyDigest(),
+  'slack-nudge': () => sendNudge(),
 };
 
 // GET /api/admin/pipeline/status — latest run per function
@@ -44,7 +47,27 @@ router.get('/api/admin/pipeline/status', async (_req, res) => {
   res.json(Object.values(latestByFunction));
 });
 
-// POST /api/admin/pipeline/trigger/:fn — manually trigger a pipeline function
+// POST /api/admin/pipeline/trigger — trigger a full collection run (same sequence as cron)
+router.post('/api/admin/pipeline/trigger', async (_req, res) => {
+  const runAll = async () => {
+    try {
+      console.log('[pipeline] Manual full run starting...');
+      await hnCollector(false);
+      await redditCollector(false);
+      await twitterCollector(false);
+      await synthesizer();
+      console.log('[pipeline] Manual full run complete.');
+    } catch (err) {
+      console.error('[pipeline] Manual full run failed:', err instanceof Error ? err.message : err);
+    }
+  };
+
+  // Fire-and-forget
+  runAll();
+  res.json({ ok: true, message: 'Full collection run triggered.' });
+});
+
+// POST /api/admin/pipeline/trigger/:fn — manually trigger a single pipeline function
 router.post('/api/admin/pipeline/trigger/:fn', async (req, res) => {
   const { fn } = req.params;
   const trigger = PIPELINE_FUNCTIONS[fn];

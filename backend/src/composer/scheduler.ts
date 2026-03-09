@@ -24,9 +24,10 @@ async function getSlack() {
  * 4. Publisher: every 30min 7:30am–11pm AEST. Fires approved posts whose scheduled_at has arrived.
  */
 export function startComposerScheduler(): void {
-  // ── Auto-draft: 6:00am AEST, Mon–Fri ──
+  // ── Auto-draft: 7:00am AEST, Mon–Fri ──
+  // Runs after the intelligence pipeline (6am) so emerging_topics exist.
   cron.schedule(
-    '0 6 * * 1-5',
+    '0 7 * * 1-5',
     async () => {
       console.log('[composer-scheduler] Auto-draft starting...');
       try {
@@ -39,9 +40,10 @@ export function startComposerScheduler(): void {
     { timezone: 'Australia/Sydney' },
   );
 
-  // ── Slack daily digest: 6:30am AEST, every day ──
+  // ── Slack daily digest: 7:15am AEST, every day ──
+  // Runs after auto-draft (7am) so posts exist to review.
   cron.schedule(
-    '30 6 * * *',
+    '15 7 * * *',
     async () => {
       console.log('[composer-scheduler] Sending daily digest...');
       try {
@@ -55,9 +57,10 @@ export function startComposerScheduler(): void {
     { timezone: 'Australia/Sydney' },
   );
 
-  // ── Slack nudge: 7:15am AEST, every day ──
+  // ── Slack nudge: 7:45am AEST, every day ──
+  // Gives 30 minutes after digest to review before nudging.
   cron.schedule(
-    '15 7 * * *',
+    '45 7 * * *',
     async () => {
       try {
         const slack = await getSlack();
@@ -118,5 +121,5 @@ export function startComposerScheduler(): void {
     { timezone: 'Australia/Sydney' },
   );
 
-  console.log('[composer-scheduler] Crons registered: auto-draft 6am, digest 6:30am, nudge 7:15am, publisher 7:30am–11pm, engagement midnight AEST.');
+  console.log('[composer-scheduler] Crons registered: auto-draft 7am, digest 7:15am, nudge 7:45am, publisher 7:30am–11pm, engagement midnight AEST.');
 }
