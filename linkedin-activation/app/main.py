@@ -476,6 +476,37 @@ async def undo_sent_outreach(full_name: str = Query(..., min_length=1)):
     return {"status": "ok", "outreach_id": row["id"], "full_name": full_name}
 
 
+@app.post("/jobs/undo-sent-outreach-by-profile")
+async def undo_sent_outreach_by_profile(profile_url: str = Query(..., min_length=1)):
+    """Temporary operator endpoint. Move a sent outreach row back to detected by LinkedIn profile URL."""
+    row = await asyncio.to_thread(db.get_outreach_by_profile_url, profile_url)
+    if not row:
+        return {"status": "error", "error": "No outreach found", "profile_url": profile_url}
+    if row.get("status") != "sent":
+        return {
+            "status": "error",
+            "error": f"Outreach status is {row.get('status')}, not sent",
+            "profile_url": profile_url,
+            "full_name": row.get("full_name"),
+        }
+
+    await asyncio.to_thread(
+        db.update_outreach,
+        row["id"],
+        {
+            "status": "detected",
+            "sent_at": None,
+            "pb_send_container_id": None,
+            "approved_message": None,
+            "approved_at": None,
+            "slack_message_ts": None,
+            "slack_channel": None,
+            "last_error": None,
+        },
+    )
+    return {"status": "ok", "outreach_id": row["id"], "full_name": row.get("full_name"), "profile_url": profile_url}
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------

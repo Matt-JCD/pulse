@@ -57,3 +57,40 @@ class TestUndoSentOutreachEndpoint:
                 "last_error": None,
             },
         )
+
+
+class TestUndoSentOutreachByProfileEndpoint:
+    @patch("app.db.update_outreach")
+    @patch("app.db.get_outreach_by_profile_url")
+    def test_moves_sent_row_back_to_detected_by_profile_url(self, mock_get_row, mock_update):
+        mock_get_row.return_value = {
+            "id": "r3",
+            "full_name": "Mark Brown",
+            "status": "sent",
+            "linkedin_profile_url": "https://www.linkedin.com/in/mark-brown-aws/",
+        }
+        client = TestClient(app)
+
+        resp = client.post("/jobs/undo-sent-outreach-by-profile?profile_url=https://www.linkedin.com/in/mark-brown-aws/")
+        data = resp.json()
+
+        assert resp.status_code == 200
+        assert data == {
+            "status": "ok",
+            "outreach_id": "r3",
+            "full_name": "Mark Brown",
+            "profile_url": "https://www.linkedin.com/in/mark-brown-aws/",
+        }
+        mock_update.assert_called_once_with(
+            "r3",
+            {
+                "status": "detected",
+                "sent_at": None,
+                "pb_send_container_id": None,
+                "approved_message": None,
+                "approved_at": None,
+                "slack_message_ts": None,
+                "slack_channel": None,
+                "last_error": None,
+            },
+        )
