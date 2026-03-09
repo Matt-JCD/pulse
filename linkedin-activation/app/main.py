@@ -42,6 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 app = FastAPI(title="LinkedIn Activation Engine")
 logger = logging.getLogger(__name__)
+_approved_send_task: asyncio.Task | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +146,86 @@ async def launch_approved_sends_job(
     supabase = db.get_db()
     result = await asyncio.to_thread(launch_approved_sends, supabase, limit, bypass_daily_limit)
     return result
+
+
+async def _run_approved_send_loop(pause_seconds: int, max_runs: int = 0) -> None:
+    """Launch approved sends one at a time with a pause between PB launches."""
+    global _approved_send_task
+
+    supabase = db.get_db()
+    run = 0
+    try:
+        while True:
+            summary = await asyncio.to_thread(db.get_outreach_status_counts)
+            approved = int(summary.get("approved", 0) or 0)
+            queued = int(summary.get("send_queued", 0) or 0)
+            logger.info(
+                "[outreach:send-loop] approved=%d send_queued=%d run=%d",
+                approved,
+                queued,
+                run,
+            )
+            if approved <= 0:
+                logger.info("[outreach:send-loop] No approved rows remaining; stopping.")
+                break
+            if max_runs > 0 and run >= max_runs:
+                logger.info("[outreach:send-loop] Max runs reached; stopping.")
+                break
+
+            run += 1
+            result = await asyncio.to_thread(
+                launch_approved_sends,
+                supabase,
+                1,
+                True,
+            )
+            logger.info(
+                "[outreach:send-loop] launched=%d skipped=%d errors=%d",
+                result.get("launched", 0),
+                result.get("skipped", 0),
+                len(result.get("errors", [])),
+            )
+            if result.get("errors"):
+                logger.warning("[outreach:send-loop] errors=%s", result["errors"])
+            if int(result.get("launched", 0) or 0) <= 0:
+                logger.info("[outreach:send-loop] Nothing launched; stopping.")
+                break
+
+            await asyncio.sleep(pause_seconds)
+    finally:
+        _approved_send_task = None
+
+
+@app.post("/jobs/launch-approved-sends-throttled")
+async def launch_approved_sends_throttled(
+    pause_seconds: int = Query(90, ge=30, le=600),
+    max_runs: int = Query(0, ge=0, le=500),
+):
+    """
+    Start a background loop that launches approved sends one at a time with a pause.
+    Uses bypass_daily_limit=True because this is a manual operator endpoint.
+    """
+    global _approved_send_task
+
+    if _approved_send_task and not _approved_send_task.done():
+        return {
+            "status": "already_running",
+            "pause_seconds": pause_seconds,
+            "max_runs": max_runs,
+        }
+
+    _approved_send_task = asyncio.create_task(_run_approved_send_loop(pause_seconds, max_runs))
+    return {
+        "status": "started",
+        "pause_seconds": pause_seconds,
+        "max_runs": max_runs,
+    }
+
+
+@app.get("/jobs/launch-approved-sends-throttled/status")
+async def launch_approved_sends_throttled_status():
+    running = bool(_approved_send_task and not _approved_send_task.done())
+    return {"running": running}
 
 
 @app.post("/jobs/send-simon-test")
