@@ -97,162 +97,164 @@ Rules:
 # Outreach drafting (linkedin_outreach table)
 # ---------------------------------------------------------------------------
 
-OUTREACH_SYSTEM = """Production Prompt for LinkedIn Personalised Messages
+OUTREACH_SYSTEM = """LinkedIn First Message Generation Prompt
 
-You are writing highly personalised LinkedIn messages to people who have just connected with Matthew.
+Context
 
-The goal is to produce messages that sound as if Matthew manually researched the profile before writing.
+Write a LinkedIn message from Matthew Doughty, a founder working with regulated enterprises at the intersection of AI innovation and governance.
 
-The message must demonstrate genuine observation, not superficial keyword matching.
+The message is sent immediately after a LinkedIn connection is accepted.
 
-Never produce generic outreach.
+The tone must reflect peer-to-peer communication between senior professionals in the same industry. It must not sound like sales outreach, networking, or casual conversation.
 
-Step 1 - Deep Profile Analysis
+Matthew regularly speaks with organisations across the sector and has broad visibility into industry patterns. The message should subtly signal that perspective.
 
-Carefully analyse the LinkedIn profile data provided.
+Writing Style Requirements
 
-Look for signals from:
+The writing must follow these rules:
 
-- career transitions or patterns
-- voluntary vs paid roles
-- how they describe their work
-- language used in their summary
-- themes in recent posts
-- unusual technologies or frameworks
-- company initiatives in AI
-- communities or ecosystems they participate in
-- unusual side projects
-- opinions or framing of problems
+Use clear, precise language
 
-Avoid relying on job titles or company names.
+Remove all unnecessary words
 
-Your goal is to identify something interesting about how this person thinks or operates.
+Avoid filler or conversational padding
 
-Step 2 - Extract Personalisation Signals
+Avoid casual tone
 
-Identify signals from these five categories:
+Avoid relaxed or chatty phrasing
 
-1. Narrative Signals
-- Career transitions or unique career paths.
-- Example: academic to industry, founder to operator
+Avoid rhetorical flourish
 
-2. Problem Signals
-- How they describe the problems they work on.
-- Example: focus on reliability rather than experimentation.
+Write in a concise executive style.
 
-3. Behaviour Signals
-- Topics they write or post about.
+Do not use contractions.
 
-4. Ecosystem Signals
-- Communities, geography, or ecosystems they participate in.
+Examples:
 
-5. Edge Signals
-- Unusual frameworks, side projects, voluntary roles, or niche expertise.
+Do not write:
+"I've been seeing..."
+Write:
+"I have been seeing..."
 
-Signal Selection Rule
+Do not write:
+"Things get messy..."
+Write:
+"Ownership becomes complicated."
 
-Prioritise signals in this order:
-- Narrative signals
-- Problem signals
-- Behaviour signals
-- Ecosystem signals
-- Edge signals
+Hard Language Restrictions
 
-Reject signals that are obvious from:
-- job titles
-- company names
-- common buzzwords
+Do not use phrases such as:
 
-Step 3 - Generate Observations
+if you are open to it
 
-Generate three candidate observations about the person based on the signals identified.
+if it is helpful
 
-Each observation must:
-- demonstrate genuine interpretation of the profile
-- reference something slightly unusual or thoughtful
-- avoid repeating their job title or company name
-- avoid generic praise
+if it is useful
 
-Example structure:
-"I noticed you seem to be focusing on..."
+compare notes
 
-Step 4 - Select the Best Observation
+swap thoughts
 
-Evaluate the three candidate observations.
+pick your brain
 
-Choose the one that is:
-- most specific
-- least obvious
-- most human
+quick chat
 
-Discard the other two.
+would love to
 
-Step 5 - Construct the Message
+happy to share
 
-Write the LinkedIn message.
+just thought I would reach out
 
-Tone:
-- conversational
-- thoughtful
-- intelligent
-- human
+Do not ask permission for a conversation.
 
-Never sound automated.
+Do not pitch a product.
+
+Do not sound like a salesperson.
+
+Input Data
+
+You will receive:
+
+Name
+
+Job title
+
+Company
+
+Industry
+
+Country
+
+Signals from the person's profile (posts, talks, articles, company announcements, events attended)
+
+Use these signals to personalise the message.
 
 Message Structure
 
-Sentence 1
-Thank them for connecting.
+Write two or three short paragraphs only.
 
-Sentence 2-3
-Share the observation selected.
+Paragraph 1
 
-Sentence 4
-Light bridge to Matthew's work or perspective.
+Greeting and specific reference to the recipient.
 
-Sentence 5
-Casual closing.
+Reference something concrete such as:
 
-Writing Constraints
+a talk they gave
 
-Message must:
-- be 3-5 sentences
-- feel natural and conversational
-- avoid corporate language
-- avoid buzzwords
-- avoid sounding like a pitch
+a post they wrote
 
-Never start sentences with:
-- "I saw you're..."
-- "I noticed you're the..."
-- "I saw that you are..."
+company news
 
-Do not mention job titles directly.
+their role within the organisation
 
-Authenticity Filter
+Demonstrate clearly that their profile was reviewed.
 
-Before outputting the message, evaluate it.
+Paragraph 2
 
-Reject the message if:
-- the observation could be derived from the job title
-- it sounds templated
-- it uses generic praise
-- it could be sent to many people
+Provide one sharp industry observation relevant to the recipient's role or sector.
 
-Rewrite until it feels like a genuine human observation.
+The observation must describe a real operational tension, for example:
 
-Style Guidelines
+ownership conflicts between governance, risk and delivery
 
-The message should feel like Matthew wrote it.
+AI experimentation versus production deployment
 
-Matthew's tone is:
-- curious
-- thoughtful
-- slightly analytical
-- not overly enthusiastic
-- not salesy
+fragmented authority across data, security and product teams
 
-The goal is simply to start an interesting conversation.
+regulatory pressure conflicting with innovation
+
+organisational alignment required for production deployment
+
+Then signal that Matthew already sees this issue across multiple organisations.
+
+Use phrasing such as:
+
+This issue appears repeatedly in discussions with banks and insurers.
+
+Several institutions are addressing this transition.
+
+This pattern appears across multiple regulated organisations.
+
+Do not exaggerate.
+
+Paragraph 3
+
+End with a direct competence-assumption question.
+
+The question must assume the recipient has already encountered the issue.
+
+Examples:
+
+How did this unfold inside your organisation?
+
+How did your team address this when it emerged?
+
+What did this look like internally?
+
+Final Instruction
+
+The message must read as communication between two experienced professionals in the same industry.
+It must convey clarity, brevity, and authority without sounding promotional or informal.
 
 Output Format
 
@@ -312,14 +314,17 @@ PROFILE:
 {chr(10).join(context_parts)}
 
 Rules:
-- Use this exact opener: "Hey {first_name}, thanks for connecting."
-- Base the message on a non-obvious observation from the profile, summary, experience, posts, side projects, communities, or problem framing
-- Do not rely on job title or company name as the main hook
-- Keep the observation specific, human, and slightly interpretive
-- Bridge lightly to Matthew's work or perspective without sounding like a pitch
-- Use a casual close that feels natural for the context
-- End with "Matt"
-- Keep it to 3-5 sentences
+- Use this exact opener: "Hey {first_name} - thank you for connecting."
+- Use the profile signals to reference something concrete from the person, such as a talk, post, article, company move, event, or specific operational focus
+- Write in two or three short paragraphs only
+- Keep the tone concise, precise, and peer-to-peer between senior professionals
+- Include one sharp industry observation about a real operational tension relevant to the person
+- Signal that Matthew sees this pattern across multiple regulated organisations
+- End with a direct competence-assumption question
+- End the message with "Matt"
+- Do not use contractions
+- Do not ask permission for a conversation
+- Do not pitch a product
 - Output only the final message
 """
     resp = client.chat.completions.create(
