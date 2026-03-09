@@ -140,9 +140,11 @@ class TestGenerateOutreachDraft:
     def test_outreach_system_contains_new_prompt_markers(self):
         assert "# LinkedIn Activation Prompt v4" in OUTREACH_SYSTEM
         assert "### 1. NEVER fabricate observations" in OUTREACH_SYSTEM
-        assert "### 4. CTA must be specific, human, and location-aware" in OUTREACH_SYSTEM
+        assert '### 4. Every message must answer: "Why should this person want to talk to Matt?"' in OUTREACH_SYSTEM
+        assert "### 5. CTA must be specific, human, and location-aware" in OUTREACH_SYSTEM
         assert "### Type A: Shared Context Message" in OUTREACH_SYSTEM
         assert "### Type D: Vendor/Founder Peer" in OUTREACH_SYSTEM
+        assert "### Type E: Advisor / Strategic Relationship" in OUTREACH_SYSTEM
         assert "Return ONLY the message text. No commentary, no labels, no alternatives. One message." in OUTREACH_SYSTEM
 
 
