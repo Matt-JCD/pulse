@@ -24,3 +24,37 @@ class TestClearAwaitingReviewSlackEndpoint:
         assert resp.status_code == 200
         assert data == {"status": "ok", "cleared": 1, "skipped": 1, "limit": 10}
         mock_get_rows.assert_called_once_with("awaiting_review", 10)
+
+
+class TestClearSlackCardsEndpoint:
+    @patch("app.db.update_outreach")
+    @patch("app.main.delete_outreach_slack_message")
+    @patch("app.db.get_outreach_by_status")
+    def test_clears_multiple_statuses_without_touching_workflow(
+        self,
+        mock_get_rows,
+        mock_delete,
+        mock_update,
+    ):
+        mock_get_rows.side_effect = [
+            [{"id": "r1", "status": "awaiting_review", "slack_message_ts": "1", "slack_channel": "C1"}],
+            [{"id": "r2", "status": "approved", "slack_message_ts": "2", "slack_channel": "C1"}],
+        ]
+        mock_delete.side_effect = [True, False]
+        client = TestClient(app)
+
+        resp = client.post("/jobs/clear-slack-cards?status=awaiting_review&status=approved&limit=10")
+        data = resp.json()
+
+        assert resp.status_code == 200
+        assert data == {
+            "status": "ok",
+            "cleared": 1,
+            "skipped": 1,
+            "statuses": ["awaiting_review", "approved"],
+            "status_counts": {"awaiting_review": 1, "approved": 1},
+            "limit": 10,
+        }
+        mock_get_rows.assert_any_call("awaiting_review", 10)
+        mock_get_rows.assert_any_call("approved", 10)
+        mock_update.assert_called_once_with("r1", {"slack_message_ts": None, "slack_channel": None})

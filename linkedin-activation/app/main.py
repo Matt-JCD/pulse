@@ -254,6 +254,44 @@ async def clear_awaiting_review_slack(limit: int = Query(500, ge=1, le=1000)):
     return {"status": "ok", "cleared": cleared, "skipped": skipped, "limit": limit}
 
 
+@app.post("/jobs/clear-slack-cards")
+async def clear_slack_cards(
+    status: list[str] = Query(...),
+    limit: int = Query(500, ge=1, le=1000),
+):
+    """
+    Temporary operator endpoint.
+    Delete Slack outreach cards for the supplied workflow statuses without changing them.
+    """
+    cleared = 0
+    skipped = 0
+    status_counts: dict[str, int] = {}
+
+    for current_status in status:
+        rows = await asyncio.to_thread(db.get_outreach_by_status, current_status, limit)
+        status_counts[current_status] = len(rows)
+        for row in rows:
+            deleted = await asyncio.to_thread(delete_outreach_slack_message, row)
+            if deleted:
+                cleared += 1
+                await asyncio.to_thread(
+                    db.update_outreach,
+                    row["id"],
+                    {"slack_message_ts": None, "slack_channel": None},
+                )
+            else:
+                skipped += 1
+
+    return {
+        "status": "ok",
+        "cleared": cleared,
+        "skipped": skipped,
+        "statuses": status,
+        "status_counts": status_counts,
+        "limit": limit,
+    }
+
+
 @app.post("/jobs/requeue-awaiting-review")
 async def requeue_awaiting_review(limit: int = Query(500, ge=1, le=1000)):
     """
