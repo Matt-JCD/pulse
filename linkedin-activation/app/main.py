@@ -230,6 +230,28 @@ async def clear_awaiting_review_slack(limit: int = Query(500, ge=1, le=1000)):
     return {"status": "ok", "cleared": cleared, "skipped": skipped, "limit": limit}
 
 
+@app.post("/jobs/requeue-awaiting-review")
+async def requeue_awaiting_review(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Move untouched awaiting_review rows back to detected so they can be redrafted.
+    """
+    rows = await asyncio.to_thread(db.get_outreach_by_status, "awaiting_review", limit)
+    reset = 0
+    for row in rows:
+        await asyncio.to_thread(
+            db.update_outreach,
+            row["id"],
+            {
+                "status": "detected",
+                "slack_message_ts": None,
+                "slack_channel": None,
+            },
+        )
+        reset += 1
+    return {"status": "ok", "requeued": reset, "limit": limit}
+
+
 # ---------------------------------------------------------------------------
 # Outreach actions
 # ---------------------------------------------------------------------------
