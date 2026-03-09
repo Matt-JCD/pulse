@@ -142,6 +142,8 @@ class TestGenerateOutreachDraft:
         assert "Do not ask permission for a conversation." in OUTREACH_SYSTEM
         assert "The message must be:" in OUTREACH_SYSTEM
         assert "two or three paragraphs" in OUTREACH_SYSTEM
+        assert "Never explain a market trend or industry problem in more than one short clause." in OUTREACH_SYSTEM
+        assert "Messages should reference the person's vantage point" in OUTREACH_SYSTEM
 
 
 # ---------------------------------------------------------------------------

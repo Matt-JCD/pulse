@@ -213,6 +213,8 @@ Paragraph 2
 
 Provide one sharp industry observation relevant to the recipient's role or sector.
 
+Messages should reference the person's vantage point rather than describe a general industry challenge.
+
 The observation must describe a real operational tension, for example:
 
 ownership conflicts between governance, risk and delivery
@@ -236,6 +238,8 @@ Several institutions are addressing this transition.
 This pattern appears across multiple regulated organisations.
 
 Do not exaggerate.
+
+Never explain a market trend or industry problem in more than one short clause.
 
 Paragraph 3
 
@@ -341,7 +345,9 @@ Rules:
 - Write in two or three short paragraphs only
 - Keep the tone concise, precise, and peer-to-peer between senior professionals
 - Include one sharp industry observation about a real operational tension relevant to the person
+- Reference the person's vantage point rather than describing a general industry challenge
 - Signal that Matthew sees this pattern across multiple regulated organisations
+- Never explain a market trend or industry problem in more than one short clause
 - End with a direct competence-assumption question
 - End the message with "Matt"
 - Do not use contractions
