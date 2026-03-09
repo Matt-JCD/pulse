@@ -6,12 +6,16 @@ import pytest
 
 from app.slack_bot import (
     build_outreach_approval_blocks,
+    build_outreach_context_modal,
     build_outreach_edit_modal,
     handle_outreach_approve,
+    handle_outreach_context,
+    handle_outreach_context_submit,
     handle_outreach_edit,
     handle_outreach_edit_submit,
     handle_outreach_reject,
     post_outreach_approval,
+    refresh_outreach_slack_message,
     update_outreach_slack_message,
 )
 
@@ -35,13 +39,13 @@ SAMPLE_ROW = {
 # ---------------------------------------------------------------------------
 
 class TestBuildOutreachApprovalBlocks:
-    def test_contains_approve_edit_reject_buttons(self):
+    def test_contains_approve_edit_context_reject_buttons(self):
         blocks = build_outreach_approval_blocks(SAMPLE_ROW)
         actions = [b for b in blocks if b["type"] == "actions"]
         assert len(actions) == 1
 
         button_ids = [e["action_id"] for e in actions[0]["elements"]]
-        assert button_ids == ["outreach_approve", "outreach_edit", "outreach_reject"]
+        assert button_ids == ["outreach_approve", "outreach_edit", "outreach_context", "outreach_reject"]
 
     def test_buttons_carry_outreach_id(self):
         blocks = build_outreach_approval_blocks(SAMPLE_ROW)
@@ -70,6 +74,14 @@ class TestBuildOutreachEditModal:
         assert modal["private_metadata"] == "outreach-1"
         assert modal["blocks"][0]["element"]["initial_value"] == "Draft text here"
         assert "max_length" not in modal["blocks"][0]["element"]
+
+
+class TestBuildOutreachContextModal:
+    def test_modal_structure(self):
+        modal = build_outreach_context_modal("outreach-1", "Attending RSAC")
+        assert modal["callback_id"] == "outreach_context_modal"
+        assert modal["private_metadata"] == "outreach-1"
+        assert modal["blocks"][0]["element"]["initial_value"] == "Attending RSAC"
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +160,26 @@ class TestHandleOutreachEdit:
         assert view["blocks"][0]["element"]["initial_value"] == "Hey Jane, love the work at Acme!"
 
 
+class TestHandleOutreachContext:
+    @patch("app.slack_bot.SLACK_BOT_TOKEN", "xoxb-test")
+    @patch("app.slack_bot.WebClient")
+    @patch("app.slack_bot.db")
+    def test_opens_modal_with_existing_context(self, mock_db, mock_webclient_cls):
+        mock_db.get_outreach.return_value = {
+            **SAMPLE_ROW,
+            "research": {"operator_context": "Attending RSAC"},
+        }
+        mock_slack = MagicMock()
+        mock_webclient_cls.return_value = mock_slack
+        mock_supabase = MagicMock()
+
+        handle_outreach_context(mock_supabase, "outreach-1", "trigger-abc")
+
+        view = mock_slack.views_open.call_args.kwargs["view"]
+        assert view["callback_id"] == "outreach_context_modal"
+        assert view["blocks"][0]["element"]["initial_value"] == "Attending RSAC"
+
+
 # ---------------------------------------------------------------------------
 # handle_outreach_edit_submit
 # ---------------------------------------------------------------------------
@@ -183,6 +215,33 @@ class TestHandleOutreachEditSubmit:
         mock_slack_update.assert_called_once_with(mock_supabase, approved_row, "Approved (edited)")
 
 
+class TestHandleOutreachContextSubmit:
+    @patch("app.slack_bot.refresh_outreach_slack_message")
+    @patch("app.drafter.generate_outreach_draft")
+    @patch("app.slack_bot.db")
+    def test_saves_context_and_redrafts(self, mock_db, mock_generate, mock_refresh):
+        row = {**SAMPLE_ROW, "research": {"profile": {"headline": "VP Engineering"}}}
+        updated = {
+            **SAMPLE_ROW,
+            "research": {"profile": {"headline": "VP Engineering"}, "operator_context": "Attending RSAC"},
+            "draft_message": "New draft",
+        }
+        mock_db.get_outreach.side_effect = [row, updated]
+        mock_generate.return_value = "New draft"
+        mock_supabase = MagicMock()
+
+        handle_outreach_context_submit(mock_supabase, "outreach-1", "Attending RSAC")
+
+        mock_db.update_outreach.assert_called_once_with(
+            "outreach-1",
+            {
+                "research": {"profile": {"headline": "VP Engineering"}, "operator_context": "Attending RSAC"},
+                "draft_message": "New draft",
+            },
+        )
+        mock_refresh.assert_called_once_with(updated)
+
+
 # ---------------------------------------------------------------------------
 # handle_outreach_reject
 # ---------------------------------------------------------------------------
@@ -210,6 +269,22 @@ class TestHandleOutreachReject:
         handle_outreach_reject(mock_supabase, "outreach-1")
 
         mock_slack_update.assert_called_once_with(mock_supabase, rejected_row, "Rejected")
+
+
+class TestRefreshOutreachSlackMessage:
+    @patch("app.slack_bot.OUTREACH_SLACK_CHANNEL", "C-outreach")
+    @patch("app.slack_bot.SLACK_BOT_TOKEN", "xoxb-test")
+    @patch("app.slack_bot.WebClient")
+    def test_refreshes_blocks_in_place(self, mock_webclient_cls):
+        mock_slack = MagicMock()
+        mock_webclient_cls.return_value = mock_slack
+
+        refresh_outreach_slack_message(SAMPLE_ROW)
+
+        mock_slack.chat_update.assert_called_once()
+        kwargs = mock_slack.chat_update.call_args.kwargs
+        assert kwargs["channel"] == "C-outreach"
+        assert kwargs["ts"] == "1234.5678"
 
 
 # ---------------------------------------------------------------------------

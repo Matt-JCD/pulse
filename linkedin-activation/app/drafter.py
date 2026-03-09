@@ -515,6 +515,7 @@ def generate_outreach_draft(outreach_row: dict) -> str:
     research = outreach_row.get("research") or {}
     profile = research.get("profile") or {}
     posts = research.get("recent_posts") or []
+    operator_context = (research.get("operator_context") or "").strip()
 
     context_parts = [
         f"Name: {full_name}",
@@ -550,6 +551,9 @@ def generate_outreach_draft(outreach_row: dict) -> str:
             if text:
                 context_parts.append(f"Post {i}: {text}")
 
+    if operator_context:
+        context_parts.append(f"OperatorContext: {operator_context}")
+
     user_prompt = f"""Write a post-connection LinkedIn message for this person.
 
 PROFILE:
@@ -567,6 +571,7 @@ Rules:
 - Do not use these structures: I noted your, I reviewed your, I saw your focus on, Your focus on, I was interested in, I was intrigued by, It stood out that
 - Do not use these phrases or words: recurring challenge, persistent challenge, frequent challenge, this pattern appears, this pattern is surfacing, this pattern recurs, across regulated enterprises, across multiple organisations, enterprise-scale adoption, operationalising at scale, how did this dynamic evolve, how did this manifest, how did your team address this, if you are open to it, if it is helpful, if it is useful, swap notes, compare notes, swap thoughts, pick your brain, quick chat, would love to, happy to share, just thought I would reach out, curious, fascinating, interesting, insightful
 - If profile detail is weak, shorten the message and use a vantage-point observation without over-claiming
+- If OperatorContext is present, treat it as trusted extra context from Matthew and use it when relevant
 - End with a direct question that assumes the person has already seen the issue
 - End with "Matt"
 - Output only the final message

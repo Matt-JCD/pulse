@@ -13,6 +13,11 @@ from app.state_machine import transition_status
 logger = logging.getLogger(__name__)
 
 
+def _get_operator_context(row: dict) -> str:
+    research = row.get("research") or {}
+    return (research.get("operator_context") or "").strip()
+
+
 # DEPRECATED — old linkedin_connections table functions. Remove in future cleanup.
 def build_approval_block(conn: dict) -> list:
     """Build Slack Block Kit message for connection approval."""
@@ -191,8 +196,9 @@ def build_outreach_approval_blocks(row: dict) -> list:
     headline = row.get("headline") or ""
     draft = row.get("draft_message") or ""
     profile_url = row.get("linkedin_profile_url") or ""
+    operator_context = _get_operator_context(row)
 
-    return [
+    blocks = [
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*{name}*\n{headline}"},
@@ -201,6 +207,17 @@ def build_outreach_approval_blocks(row: dict) -> list:
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"<{profile_url}|View Profile>"},
         },
+    ]
+
+    if operator_context:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Context Variable:*\n{operator_context}"},
+            }
+        )
+
+    blocks.extend([
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"> {draft}"},
@@ -223,6 +240,12 @@ def build_outreach_approval_blocks(row: dict) -> list:
                 },
                 {
                     "type": "button",
+                    "text": {"type": "plain_text", "text": "Context"},
+                    "action_id": "outreach_context",
+                    "value": row["id"],
+                },
+                {
+                    "type": "button",
                     "text": {"type": "plain_text", "text": "Reject"},
                     "style": "danger",
                     "action_id": "outreach_reject",
@@ -230,7 +253,8 @@ def build_outreach_approval_blocks(row: dict) -> list:
                 },
             ],
         },
-    ]
+    ])
+    return blocks
 
 
 def build_outreach_edit_modal(outreach_id: str, current_draft: str) -> dict:
@@ -252,6 +276,35 @@ def build_outreach_edit_modal(outreach_id: str, current_draft: str) -> dict:
                     "action_id": "outreach_draft_input",
                     "initial_value": current_draft,
                     "multiline": True,
+                },
+            }
+        ],
+    }
+
+
+def build_outreach_context_modal(outreach_id: str, current_context: str) -> dict:
+    """Build a Slack modal for adding trusted operator context and redrafting."""
+    return {
+        "type": "modal",
+        "callback_id": "outreach_context_modal",
+        "private_metadata": outreach_id,
+        "title": {"type": "plain_text", "text": "Add Context"},
+        "submit": {"type": "plain_text", "text": "Redraft"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "outreach_context_block",
+                "label": {"type": "plain_text", "text": "Context Variable"},
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "outreach_context_input",
+                    "initial_value": current_context,
+                    "multiline": True,
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Example: They are attending RSAC / We will both be at CDAO Sydney",
+                    },
                 },
             }
         ],
@@ -297,6 +350,27 @@ def update_outreach_slack_message(supabase_client: Client, outreach_row: dict, s
         )
     except Exception:
         logger.exception("Slack outreach message update failed for %s", outreach_row.get("id"))
+
+
+def refresh_outreach_slack_message(outreach_row: dict) -> None:
+    """Refresh an awaiting_review Slack card in place with the latest draft and context."""
+    if not SLACK_BOT_TOKEN or not outreach_row.get("slack_message_ts"):
+        return
+
+    channel = outreach_row.get("slack_channel") or OUTREACH_SLACK_CHANNEL
+    if not channel:
+        return
+
+    try:
+        slack = WebClient(token=SLACK_BOT_TOKEN)
+        slack.chat_update(
+            channel=channel,
+            ts=outreach_row["slack_message_ts"],
+            text=f"Updated outreach: {outreach_row.get('full_name') or ''}",
+            blocks=build_outreach_approval_blocks(outreach_row),
+        )
+    except Exception:
+        logger.exception("Slack outreach message refresh failed for %s", outreach_row.get("id"))
 
 
 def delete_outreach_slack_message(outreach_row: dict) -> bool:
@@ -345,6 +419,17 @@ def handle_outreach_edit(supabase_client: Client, outreach_id: str, trigger_id: 
     slack.views_open(trigger_id=trigger_id, view=modal)
 
 
+def handle_outreach_context(supabase_client: Client, outreach_id: str, trigger_id: str) -> None:
+    """Open the context modal for an outreach draft."""
+    row = db.get_outreach(outreach_id)
+    if not row:
+        raise RuntimeError(f"Outreach {outreach_id} not found")
+
+    modal = build_outreach_context_modal(outreach_id, _get_operator_context(row))
+    slack = WebClient(token=SLACK_BOT_TOKEN)
+    slack.views_open(trigger_id=trigger_id, view=modal)
+
+
 def handle_outreach_edit_submit(supabase_client: Client, outreach_id: str, edited_text: str) -> None:
     """Save edited text as approved_message, transition to approved."""
     db.update_outreach(outreach_id, {
@@ -355,6 +440,28 @@ def handle_outreach_edit_submit(supabase_client: Client, outreach_id: str, edite
 
     updated = db.get_outreach(outreach_id)
     update_outreach_slack_message(supabase_client, updated, "Approved (edited)")
+
+
+def handle_outreach_context_submit(supabase_client: Client, outreach_id: str, operator_context: str) -> None:
+    """Store operator context, regenerate the draft, and refresh the Slack card."""
+    from app.drafter import generate_outreach_draft
+
+    row = db.get_outreach(outreach_id)
+    if not row:
+        raise RuntimeError(f"Outreach {outreach_id} not found")
+
+    research = dict(row.get("research") or {})
+    if operator_context.strip():
+        research["operator_context"] = operator_context.strip()
+    else:
+        research.pop("operator_context", None)
+
+    row["research"] = research
+    draft_text = generate_outreach_draft(row)
+    db.update_outreach(outreach_id, {"research": research, "draft_message": draft_text})
+
+    updated = db.get_outreach(outreach_id)
+    refresh_outreach_slack_message(updated)
 
 
 def handle_outreach_reject(supabase_client: Client, outreach_id: str) -> None:

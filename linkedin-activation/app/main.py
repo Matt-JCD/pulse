@@ -34,7 +34,8 @@ from app.phantombuster_webhook import process_pb_webhook
 from app.send_launcher import launch_approved_sends
 from app.slack_bot import (
     handle_outreach_approve, handle_outreach_edit, handle_outreach_edit_submit,
-    handle_outreach_reject, delete_outreach_slack_message,
+    handle_outreach_reject, handle_outreach_context, handle_outreach_context_submit,
+    delete_outreach_slack_message,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -708,6 +709,14 @@ async def slack_events(request: Request):
                         asyncio.to_thread(handle_outreach_edit, supabase_client, outreach_id, trigger_id)
                     )
 
+                elif action_id == "outreach_context":
+                    logger.info("[outreach:slack] Context action for %s", outreach_id)
+                    trigger_id = payload["trigger_id"]
+                    supabase_client = db.get_db()
+                    asyncio.create_task(
+                        asyncio.to_thread(handle_outreach_context, supabase_client, outreach_id, trigger_id)
+                    )
+
                 elif action_id == "outreach_reject":
                     logger.info("[outreach:slack] Reject action for %s", outreach_id)
                     supabase_client = db.get_db()
@@ -722,6 +731,11 @@ async def slack_events(request: Request):
                 edited_text = view["state"]["values"]["outreach_draft_block"]["outreach_draft_input"]["value"]
                 supabase_client = db.get_db()
                 await asyncio.to_thread(handle_outreach_edit_submit, supabase_client, outreach_id, edited_text)
+            elif view.get("callback_id") == "outreach_context_modal":
+                outreach_id = view["private_metadata"]
+                context_text = view["state"]["values"]["outreach_context_block"]["outreach_context_input"]["value"]
+                supabase_client = db.get_db()
+                await asyncio.to_thread(handle_outreach_context_submit, supabase_client, outreach_id, context_text)
 
         return Response(status_code=200)
     except Exception:
