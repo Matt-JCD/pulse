@@ -97,8 +97,8 @@ class TestGenerateOutreachDraft:
 
         create_call = mock_client.chat.completions.create.call_args
         user_message = create_call.kwargs["messages"][1]["content"]
-        assert "Jane Smith" in user_message
-        assert "VP Engineering @ Acme Corp" in user_message
+        assert "first_name: Jane" in user_message
+        assert "headline: VP Engineering @ Acme Corp" in user_message
 
     @patch("app.drafter.OPENAI_API_KEY", "test-key")
     @patch("app.drafter.OpenAI")
@@ -124,7 +124,7 @@ class TestGenerateOutreachDraft:
 
         create_call = mock_client.chat.completions.create.call_args
         user_message = create_call.kwargs["messages"][1]["content"]
-        assert "Headline: N/A" in user_message
+        assert "headline: N/A" in user_message
 
     @patch("app.drafter.OPENAI_API_KEY", "test-key")
     @patch("app.drafter.OpenAI")
@@ -138,12 +138,12 @@ class TestGenerateOutreachDraft:
         assert len(result) == 500
 
     def test_outreach_system_contains_new_prompt_markers(self):
-        assert "LinkedIn First Message Generation Prompt (Production Version)" in OUTREACH_SYSTEM
-        assert "The message is sent immediately after a LinkedIn connection request has been accepted." in OUTREACH_SYSTEM
-        assert "Never use these structures" in OUTREACH_SYSTEM
-        assert "Weak Profile Fallback Rule" in OUTREACH_SYSTEM
-        assert "under ~90 words when possible" in OUTREACH_SYSTEM
-        assert "Being close to artificial intelligence adoption inside insurance" in OUTREACH_SYSTEM
+        assert "# LinkedIn Activation Prompt v4" in OUTREACH_SYSTEM
+        assert "### 1. NEVER fabricate observations" in OUTREACH_SYSTEM
+        assert "### 4. CTA must be specific, human, and location-aware" in OUTREACH_SYSTEM
+        assert "### Type A: Shared Context Message" in OUTREACH_SYSTEM
+        assert "### Type D: Vendor/Founder Peer" in OUTREACH_SYSTEM
+        assert "Return ONLY the message text. No commentary, no labels, no alternatives. One message." in OUTREACH_SYSTEM
 
 
 # ---------------------------------------------------------------------------
