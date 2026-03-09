@@ -18,9 +18,6 @@ BLOCKED_HEADLINE_PATTERNS = [
     r"\bpre[- ]sales\b",
 ]
 
-MAX_PB_MESSAGE_LENGTH = 280
-
-
 def filter_outreach_candidate(headline: str | None) -> tuple[bool, str | None]:
     """Return whether a profile should be excluded from outreach based on headline."""
     normalized = _normalize_match_text(headline)
@@ -38,7 +35,7 @@ def sanitize_message_for_pb(message: str) -> str:
     Normalize outgoing PB send text so the browser typing step gets simpler input.
     - ASCII-only
     - single spaces
-    - conservative length cap
+    - preserve message length
     """
     replacements = {
         "\u2018": "'",
@@ -57,15 +54,7 @@ def sanitize_message_for_pb(message: str) -> str:
         .encode("ascii", "ignore")
         .decode("ascii")
     )
-    ascii_text = " ".join(ascii_text.split()).strip()
-    if len(ascii_text) <= MAX_PB_MESSAGE_LENGTH:
-        return ascii_text
-
-    trimmed = ascii_text[: MAX_PB_MESSAGE_LENGTH].rstrip(" ,.;:-")
-    last_break = max(trimmed.rfind(". "), trimmed.rfind("? "), trimmed.rfind("! "), trimmed.rfind(" "))
-    if last_break >= 160:
-        trimmed = trimmed[:last_break].rstrip(" ,.;:-")
-    return trimmed
+    return " ".join(ascii_text.split()).strip()
 
 
 def _normalize_match_text(value: str | None) -> str:

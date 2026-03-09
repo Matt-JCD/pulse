@@ -165,7 +165,7 @@ class TestLaunchApprovedSends:
         launch_approved_sends(supabase)
 
         launched_message = mock_launch.call_args[0][1]
-        assert len(launched_message) <= 280
+        assert len(launched_message) > 280
         assert "—" not in launched_message
         assert "“" not in launched_message
 
