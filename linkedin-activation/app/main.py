@@ -226,6 +226,27 @@ async def sent_this_morning(limit: int = Query(500, ge=1, le=1000)):
     }
 
 
+@app.get("/jobs/sent-this-morning-full")
+async def sent_this_morning_full(limit: int = Query(500, ge=1, le=1000)):
+    """
+    Temporary operator endpoint.
+    Return full linkedin_outreach rows sent since local Sydney midnight.
+    """
+    sydney = timezone(timedelta(hours=11))
+    local_now = datetime.now(sydney)
+    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    utc_start = local_midnight.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    rows = await asyncio.to_thread(db.get_full_outreach_sent_since, utc_start, limit)
+    return {
+        "status": "ok",
+        "timezone": "Australia/Sydney",
+        "local_date": local_midnight.date().isoformat(),
+        "sent_after_utc": utc_start,
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
 @app.post("/jobs/reject-approved-outreach")
 async def reject_approved_outreach(full_name: str = Query(..., min_length=1)):
     """Temporary operator endpoint. Reject exactly one approved outreach row by full name."""
