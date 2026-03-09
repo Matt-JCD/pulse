@@ -63,6 +63,22 @@ class TestLaunchApprovedSends:
         mock_db.get_approved_outreach.assert_not_called()
         mock_launch.assert_not_called()
 
+    @patch("app.send_launcher.time.sleep")
+    @patch("app.send_launcher.transition_status")
+    @patch("app.send_launcher.db")
+    @patch("app.send_launcher.launch_message_sender")
+    def test_can_bypass_daily_limit(self, mock_launch, mock_db, mock_transition, _sleep):
+        mock_db.get_sent_today_count.return_value = 15
+        mock_db.get_approved_outreach.return_value = [_make_row("r1"), _make_row("r2")]
+        mock_launch.return_value = {"containerId": "c-1"}
+        supabase = MagicMock()
+
+        result = launch_approved_sends(supabase, limit=2, bypass_daily_limit=True)
+
+        assert result["launched"] == 2
+        mock_db.get_approved_outreach.assert_called_once_with(limit=2)
+        assert mock_transition.call_count == 2
+
     @patch("app.send_launcher.DAILY_SEND_LIMIT", 5)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")

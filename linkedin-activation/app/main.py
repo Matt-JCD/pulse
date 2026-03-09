@@ -136,10 +136,13 @@ async def enrich_and_redraft_job(
 
 
 @app.post("/jobs/launch-approved-sends")
-async def launch_approved_sends_job(limit: Optional[int] = Query(None, ge=1, le=50)):
+async def launch_approved_sends_job(
+    limit: Optional[int] = Query(None, ge=1, le=50),
+    bypass_daily_limit: bool = Query(False),
+):
     """Cron-triggered. Launches PB message sender for approved outreach rows."""
     supabase = db.get_db()
-    result = await asyncio.to_thread(launch_approved_sends, supabase, limit)
+    result = await asyncio.to_thread(launch_approved_sends, supabase, limit, bypass_daily_limit)
     return result
 
 

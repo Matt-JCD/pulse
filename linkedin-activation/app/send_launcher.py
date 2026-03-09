@@ -14,7 +14,11 @@ from app.state_machine import transition_status
 logger = logging.getLogger(__name__)
 
 
-def launch_approved_sends(supabase_client: Client, limit: int | None = None) -> dict:
+def launch_approved_sends(
+    supabase_client: Client,
+    limit: int | None = None,
+    bypass_daily_limit: bool = False,
+) -> dict:
     """
     Launch PB message-sender for approved outreach rows, respecting DAILY_SEND_LIMIT.
     Processes oldest-approved first. Sleeps 2s between launches.
@@ -22,13 +26,22 @@ def launch_approved_sends(supabase_client: Client, limit: int | None = None) -> 
     """
     sent_today = db.get_sent_today_count()
     remaining = max(0, DAILY_SEND_LIMIT - sent_today)
-    logger.info("[outreach:send] Daily limit: %d/%d sent today, %d remaining", sent_today, DAILY_SEND_LIMIT, remaining)
+    logger.info(
+        "[outreach:send] Daily limit: %d/%d sent today, %d remaining%s",
+        sent_today,
+        DAILY_SEND_LIMIT,
+        remaining,
+        " (bypass enabled)" if bypass_daily_limit else "",
+    )
 
-    if remaining == 0:
+    if remaining == 0 and not bypass_daily_limit:
         logger.info("[outreach:send] Daily send limit reached. Skipping.")
         return {"launched": 0, "skipped": 0, "errors": []}
 
-    fetch_limit = min(limit, remaining) if limit is not None else remaining
+    if bypass_daily_limit:
+        fetch_limit = limit if limit is not None else 50
+    else:
+        fetch_limit = min(limit, remaining) if limit is not None else remaining
     rows = db.get_approved_outreach(limit=fetch_limit)
     launched = 0
     skipped = 0
