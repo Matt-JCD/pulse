@@ -53,25 +53,32 @@ class EnrichmentResult:
 
 def _poll_until_complete(
     agent_id: str,
+    launch_time: float,
     timeout: int = DEFAULT_TIMEOUT_S,
     interval: int = POLL_INTERVAL_S,
 ) -> dict:
     """
-    Poll a PhantomBuster agent until its latest run finishes.
+    Poll a PhantomBuster agent until the *current* run finishes.
 
     How it works:
-    - After launching, we poll GET /agents/fetch to check the agent state.
-    - PB's `lastEndType` changes to "finished" and `runningContainers` drops
-      to 0 when the run completes.
-    - We also check that `lastEndType` is set (not just empty), because a
-      freshly-launched agent may briefly show 0 containers before spinning up.
+    - We compare `lastEndTimestamp` against `launch_time` to ensure we're
+      seeing results from the run we just launched — not stale data from
+      a previous run.
+    - PB's `lastEndTimestamp` is a Unix timestamp (seconds). We only
+      consider the run done when this is newer than our launch time AND
+      `runningContainers` is 0.
+
+    Why this matters:
+    - Without this check, the poller can see stale `lastEndType: "finished"`
+      from a previous run before the new container spins up, and return
+      immediately with the wrong person's data.
 
     Returns the full agent status dict (contains s3Folder and orgS3Folder
     needed to download result CSV).
     """
     start = time.time()
     # Skip the first check — give PB a moment to register the launch
-    time.sleep(3)
+    time.sleep(5)
 
     while True:
         elapsed = time.time() - start
@@ -84,8 +91,12 @@ def _poll_until_complete(
 
         running = status.get("runningContainers", 0)
         end_type = status.get("lastEndType", "")
+        end_ts = status.get("lastEndTimestamp", 0)
 
-        if running == 0 and end_type:
+        # Only consider done if the end timestamp is from AFTER we launched
+        is_current_run = end_ts and end_ts > launch_time
+
+        if running == 0 and end_type and is_current_run:
             log.info(
                 "PB agent %s completed: %s (%.1fs)",
                 agent_id, end_type, elapsed,
@@ -93,8 +104,8 @@ def _poll_until_complete(
             return status
 
         log.debug(
-            "PB agent %s still running (%.0fs elapsed, containers=%d)",
-            agent_id, elapsed, running,
+            "PB agent %s still running (%.0fs elapsed, containers=%d, endTs=%s, launchTime=%.0f)",
+            agent_id, elapsed, running, end_ts, launch_time,
         )
         time.sleep(interval)
 
@@ -128,10 +139,11 @@ def _run_profile_scraper(profile_url: str, timeout: int) -> tuple[str | None, st
         if not PB_PROFILE_SCRAPER_ID:
             return None, "PB_PROFILE_SCRAPER_ID not configured"
 
+        launch_time = time.time()
         launch_profile_scraper(profile_url)
         log.info("Profile Scraper launched for %s", profile_url)
 
-        status = _poll_until_complete(PB_PROFILE_SCRAPER_ID, timeout=timeout)
+        status = _poll_until_complete(PB_PROFILE_SCRAPER_ID, launch_time, timeout=timeout)
         csv_text = _download_csv(status)
         return csv_text, None
 
@@ -156,10 +168,11 @@ def _run_activity_extractor(
         if not PB_ACTIVITY_EXTRACTOR_ID:
             return None, "PB_ACTIVITY_EXTRACTOR_ID not configured"
 
+        launch_time = time.time()
         launch_activity_extractor(profile_url, num_activities)
         log.info("Activity Extractor launched for %s", profile_url)
 
-        status = _poll_until_complete(PB_ACTIVITY_EXTRACTOR_ID, timeout=timeout)
+        status = _poll_until_complete(PB_ACTIVITY_EXTRACTOR_ID, launch_time, timeout=timeout)
         csv_text = _download_csv(status)
         return csv_text, None
 
