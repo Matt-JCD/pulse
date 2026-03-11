@@ -45,7 +45,7 @@ class TestBuildOutreachApprovalBlocks:
         assert len(actions) == 1
 
         button_ids = [e["action_id"] for e in actions[0]["elements"]]
-        assert button_ids == ["outreach_approve", "outreach_edit", "outreach_context", "outreach_reject"]
+        assert button_ids == ["outreach_approve", "outreach_edit", "outreach_redraft", "outreach_context", "outreach_reject"]
 
     def test_buttons_carry_outreach_id(self):
         blocks = build_outreach_approval_blocks(SAMPLE_ROW)

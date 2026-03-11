@@ -958,7 +958,10 @@ def generate_outreach_draft(outreach_row: dict) -> str:
         title = exp.get("title", "")
         company_name = exp.get("companyName", "")
         desc = exp.get("description", "")
+        date_range = exp.get("dateRange", "")
         line = f"{title} at {company_name}".strip()
+        if date_range:
+            line += f" ({date_range})"
         if desc:
             line += f" - {desc[:200]}"
         positions.append(line)
@@ -969,13 +972,49 @@ def generate_outreach_draft(outreach_row: dict) -> str:
     if skills:
         context_parts.append(f"skills: {skills[:20]}")
 
+    # Education — from PB Profile Scraper enrichment
+    education = profile.get("education") or []
+    if education:
+        edu_lines = []
+        for edu in education[:3]:
+            school = edu.get("schoolName", "")
+            degree = edu.get("degree", "")
+            edu_lines.append(f"{degree} - {school}" if degree else school)
+        context_parts.append(f"education: {edu_lines}")
+
+    # Company context — from PB Profile Scraper enrichment
+    company_data = profile.get("company") or {}
+    if company_data.get("description"):
+        context_parts.append(f"company_description: {company_data['description'][:300]}")
+    if company_data.get("industry"):
+        context_parts.append(f"company_industry: {company_data['industry']}")
+    if company_data.get("size"):
+        context_parts.append(f"company_size: {company_data['size']}")
+
+    # Follower/connection counts — signals influence level
+    if profile.get("followerCount"):
+        context_parts.append(f"follower_count: {profile['followerCount']}")
+    if profile.get("connectionCount"):
+        context_parts.append(f"connection_count: {profile['connectionCount']}")
+
+    # Enrichment metadata — themes and engagement from Activity Extractor
+    enrichment_meta = research.get("enrichment_meta") or {}
+    if enrichment_meta.get("topThemes"):
+        context_parts.append(f"content_themes: {enrichment_meta['topThemes']}")
+    if enrichment_meta.get("engagementLevel"):
+        context_parts.append(f"engagement_level: {enrichment_meta['engagementLevel']}")
+
     if posts:
         context_parts.append("\nrecent_posts:")
         for i, p in enumerate(posts[:5], 1):
             text = p.get("commentary") or p.get("text") or p.get("content", "")
             text = text[:400]
             if text:
-                context_parts.append(f"- post_{i}: {text}")
+                likes = p.get("likeCount", 0)
+                comments = p.get("commentCount", 0)
+                is_repost = p.get("isRepost", False)
+                tag = " [repost]" if is_repost else ""
+                context_parts.append(f"- post_{i}{tag} ({likes} likes, {comments} comments): {text}")
 
     if shared_context:
         context_parts.append(f"shared_context: {shared_context}")
@@ -1022,28 +1061,187 @@ Rules:
     return text
 
 
+def redraft_outreach(supabase_client: Client, outreach_id: str) -> str:
+    """
+    Generate a new draft taking a different angle from the previous one.
+
+    How it works:
+    - Fetches the current row (with enrichment and previous draft)
+    - Passes the previous draft to GPT-4.1 as context to avoid
+    - Asks for a completely different angle/hook
+    - Updates the draft_message in the DB and returns the new text
+
+    Called from the Slack "Redraft" button handler.
+    """
+    row = (
+        supabase_client.table("linkedin_outreach")
+        .select("*")
+        .eq("id", outreach_id)
+        .single()
+        .execute()
+    ).data
+
+    previous_draft = row.get("draft_message") or ""
+    first_name = row.get("first_name") or (row.get("full_name") or "").split(" ")[0]
+
+    # Build the same context as generate_outreach_draft
+    # but add the previous draft as something to avoid
+    research = row.get("research") or {}
+    profile = research.get("profile") or {}
+    posts = research.get("recent_posts") or []
+    shared_context = (research.get("operator_context") or "").strip()
+    headline = row.get("headline") or "N/A"
+    company = row.get("company") or ""
+    role_seniority = _infer_role_seniority(headline)
+    skills = profile.get("skills") or research.get("skills") or []
+
+    context_parts = [
+        f"first_name: {first_name}",
+        f"headline: {headline}",
+        f"company: {company}",
+        f"role_seniority: {role_seniority}",
+    ]
+
+    if profile.get("locationName"):
+        context_parts.append(f"location: {profile['locationName']}")
+    if profile.get("industryName"):
+        context_parts.append(f"industry: {profile['industryName']}")
+    if profile.get("summary"):
+        context_parts.append(f"profile_summary: {profile['summary'][:800]}")
+
+    positions = []
+    for exp in (profile.get("experience") or [])[:3]:
+        title = exp.get("title", "")
+        company_name = exp.get("companyName", "")
+        desc = exp.get("description", "")
+        date_range = exp.get("dateRange", "")
+        line = f"{title} at {company_name}".strip()
+        if date_range:
+            line += f" ({date_range})"
+        if desc:
+            line += f" - {desc[:200]}"
+        positions.append(line)
+    if positions:
+        context_parts.append(f"positions: {positions}")
+    if skills:
+        context_parts.append(f"skills: {skills[:20]}")
+
+    education = profile.get("education") or []
+    if education:
+        edu_lines = []
+        for edu in education[:3]:
+            school = edu.get("schoolName", "")
+            degree = edu.get("degree", "")
+            edu_lines.append(f"{degree} - {school}" if degree else school)
+        context_parts.append(f"education: {edu_lines}")
+
+    enrichment_meta = research.get("enrichment_meta") or {}
+    if enrichment_meta.get("topThemes"):
+        context_parts.append(f"content_themes: {enrichment_meta['topThemes']}")
+
+    if posts:
+        context_parts.append("\nrecent_posts:")
+        for i, p in enumerate(posts[:5], 1):
+            text = p.get("commentary") or p.get("text") or p.get("content", "")
+            text = text[:400]
+            if text:
+                likes = p.get("likeCount", 0)
+                is_repost = p.get("isRepost", False)
+                tag = " [repost]" if is_repost else ""
+                context_parts.append(f"- post_{i}{tag} ({likes} likes): {text}")
+
+    if shared_context:
+        context_parts.append(f"shared_context: {shared_context}")
+
+    user_prompt = f"""Write one LinkedIn follow-up message using the v4 prompt above.
+
+INPUT DATA:
+{chr(10).join(context_parts)}
+
+PREVIOUS DRAFT (DO NOT repeat this — take a completely different angle, different hook, different reference point):
+{previous_draft}
+
+Rules:
+- Generate a DIFFERENT message from the previous draft above
+- Pick a different post, different experience detail, or different conversational angle
+- Use only the provided input data
+- shared_context overrides the normal opening and CTA logic when present
+- Do not fabricate profile observations when posts and profile_summary are thin or empty
+- Use first name only
+- Respect the message type routing, seniority calibration, industry calibration, and CTA rules from the v4 prompt
+- Keep the wording human and specific, not templated
+- Output only the final message
+"""
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    resp = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        max_tokens=600,
+        messages=[
+            {"role": "developer", "content": OUTREACH_SYSTEM},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    text = (resp.choices[0].message.content or "").strip().replace("\n", " ")
+    text = " ".join(text.split())
+
+    # Store the new draft (keep previous draft in history)
+    previous_drafts = row.get("previous_drafts") or []
+    if previous_draft:
+        previous_drafts.append(previous_draft)
+    db.update_outreach(outreach_id, {
+        "draft_message": text,
+        "previous_drafts": previous_drafts,
+    })
+    logger.info("[outreach:redraft] New draft for %s (%d chars)", row.get("full_name"), len(text))
+
+    return text
+
+
 def enrich_and_store(supabase_client: Client, outreach_id: str, row: dict) -> dict:
-    """Enrich a connection via LinkdAPI and store the result. Returns updated row."""
-    from app.linkdapi import enrich_profile
+    """
+    Enrich a connection via PhantomBuster and store the result. Returns updated row.
 
-    username = row.get("public_identifier")
-    if not username:
-        logger.warning("[outreach:enrich] No public_identifier for %s, skipping enrichment", outreach_id)
-        return row
+    Runs Profile Scraper + Activity Extractor in parallel, merges their output
+    into the same {"profile": {...}, "recent_posts": [...]} shape the drafter
+    expects. Falls back gracefully if one or both phantoms fail.
+    """
+    from app.pb_chain import enrich_contact
 
-    logger.info("[outreach:enrich] Enriching %s (%s)", row.get("full_name"), username)
-    research = enrich_profile(username)
+    profile_url = row.get("linkedin_profile_url") or ""
+    if not profile_url:
+        # Fall back to constructing URL from public_identifier
+        username = row.get("public_identifier", "")
+        if username:
+            profile_url = f"https://linkedin.com/in/{username}"
+        else:
+            logger.warning("[outreach:enrich] No profile URL or username for %s, skipping", outreach_id)
+            return row
 
-    if research.get("profile"):
+    logger.info("[outreach:enrich] Enriching %s via PB (%s)", row.get("full_name"), profile_url)
+    result = enrich_contact(profile_url)
+
+    if result.errors:
+        for err in result.errors:
+            logger.warning("[outreach:enrich] %s: %s", row.get("full_name"), err)
+
+    research = result.research
+    if research.get("profile") or research.get("recent_posts"):
+        # Preserve any existing operator_context from Slack interactions
+        existing_research = row.get("research") or {}
+        if existing_research.get("operator_context"):
+            research["operator_context"] = existing_research["operator_context"]
+
         db.update_outreach(outreach_id, {"research": research})
         row["research"] = research
         logger.info(
-            "[outreach:enrich] Stored enrichment for %s (posts: %d)",
+            "[outreach:enrich] Stored PB enrichment for %s (profile=%s, posts=%d, themes=%s)",
             row.get("full_name"),
+            result.profile_ok,
             len(research.get("recent_posts", [])),
+            research.get("enrichment_meta", {}).get("topThemes", []),
         )
     else:
-        logger.warning("[outreach:enrich] No profile data returned for %s", username)
+        logger.warning("[outreach:enrich] No enrichment data returned for %s", row.get("full_name"))
 
     return row
 

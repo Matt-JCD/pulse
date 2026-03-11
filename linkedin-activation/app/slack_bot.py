@@ -191,70 +191,200 @@ def handle_edit_submit(connection_id: str, new_draft: str, slack: WebClient, cha
 # ---------------------------------------------------------------------------
 
 def build_outreach_approval_blocks(row: dict) -> list:
-    """Build Block Kit message for outreach approval."""
+    """
+    Build Block Kit message for outreach approval with enrichment summary.
+
+    Layout (all sections conditional — only shown when data exists):
+    1. Header: name + title + company
+    2. Location line: location, followers, connections
+    3. Profile link
+    4. Background: experience + education (if profile enrichment exists)
+    5. Recent Activity: top posts with engagement + themes (if activity exists)
+    6. Operator context (if set via Context button)
+    7. Draft message
+    8. Action buttons: Approve, Edit, Redraft, Context, Reject
+    """
     name = row.get("full_name") or f"{row.get('first_name', '')} {row.get('last_name', '')}".strip()
     headline = row.get("headline") or ""
     draft = row.get("draft_message") or ""
     profile_url = row.get("linkedin_profile_url") or ""
     operator_context = _get_operator_context(row)
 
-    blocks = [
+    research = row.get("research") or {}
+    profile = research.get("profile") or {}
+    posts = research.get("recent_posts") or []
+    enrichment_meta = research.get("enrichment_meta") or {}
+
+    # --- Header: name + headline + profile link ---
+    header_parts = [f"*{name}*"]
+    if headline:
+        header_parts[0] += f" — {headline}"
+
+    # Location + influence signals on one line
+    location_parts = []
+    location = profile.get("locationName") or ""
+    if location:
+        location_parts.append(location)
+    followers = profile.get("followerCount") or 0
+    if followers:
+        location_parts.append(f"{_format_count(followers)} followers")
+    connections = profile.get("connectionCount") or 0
+    if connections:
+        location_parts.append(f"{_format_count(connections)} connections")
+    if location_parts:
+        header_parts.append(" · ".join(location_parts))
+
+    if profile_url:
+        header_parts.append(f"<{profile_url}|View Profile>")
+
+    blocks: list[dict] = [
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*{name}*\n{headline}"},
-        },
-        {
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"<{profile_url}|View Profile>"},
+            "text": {"type": "mrkdwn", "text": "\n".join(header_parts)},
         },
     ]
 
-    if operator_context:
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Context Variable:*\n{operator_context}"},
-            }
-        )
-
-    blocks.extend([
-        {
+    # --- Background section (experience + education) ---
+    background_lines = _build_background_lines(profile)
+    if background_lines:
+        blocks.append({"type": "divider"})
+        blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"> {draft}"},
-        },
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Approve"},
-                    "style": "primary",
-                    "action_id": "outreach_approve",
-                    "value": row["id"],
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Edit"},
-                    "action_id": "outreach_edit",
-                    "value": row["id"],
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Context"},
-                    "action_id": "outreach_context",
-                    "value": row["id"],
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Reject"},
-                    "style": "danger",
-                    "action_id": "outreach_reject",
-                    "value": row["id"],
-                },
-            ],
-        },
-    ])
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Background:*\n" + "\n".join(background_lines),
+            },
+        })
+
+    # --- Recent Activity section ---
+    activity_text = _build_activity_text(posts, enrichment_meta)
+    if activity_text:
+        blocks.append({"type": "divider"})
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": activity_text},
+        })
+
+    # --- Operator context ---
+    if operator_context:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Context:* {operator_context}"},
+        })
+
+    # --- Draft message ---
+    blocks.append({"type": "divider"})
+    blocks.append({
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": f"*Draft:*\n> {draft}"},
+    })
+
+    # --- Action buttons ---
+    blocks.append({
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Approve"},
+                "style": "primary",
+                "action_id": "outreach_approve",
+                "value": row["id"],
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Edit"},
+                "action_id": "outreach_edit",
+                "value": row["id"],
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Redraft"},
+                "action_id": "outreach_redraft",
+                "value": row["id"],
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Context"},
+                "action_id": "outreach_context",
+                "value": row["id"],
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Reject"},
+                "style": "danger",
+                "action_id": "outreach_reject",
+                "value": row["id"],
+            },
+        ],
+    })
     return blocks
+
+
+def _build_background_lines(profile: dict) -> list[str]:
+    """Build bullet points for experience and education. Returns empty list if no data."""
+    lines = []
+
+    for exp in (profile.get("experience") or [])[:3]:
+        title = exp.get("title", "")
+        company = exp.get("companyName", "")
+        date_range = exp.get("dateRange", "")
+        if title and company:
+            line = f"• {title} at {company}"
+            if date_range:
+                line += f" ({date_range})"
+            lines.append(line)
+
+    for edu in (profile.get("education") or [])[:2]:
+        school = edu.get("schoolName", "")
+        degree = edu.get("degree", "")
+        if school:
+            line = f"• {school}"
+            if degree:
+                line += f" — {degree}"
+            lines.append(line)
+
+    return lines
+
+
+def _build_activity_text(posts: list[dict], enrichment_meta: dict) -> str:
+    """Build the Recent Activity section text. Returns empty string if no posts."""
+    if not posts:
+        return ""
+
+    # Filter to original posts first, fall back to all if none
+    original_posts = [p for p in posts if not p.get("isRepost")]
+    display_posts = original_posts[:3] if original_posts else posts[:3]
+
+    lines = [f"*Recent Activity ({len(posts)} posts):*"]
+    for p in display_posts:
+        text = (p.get("text") or p.get("commentary") or "")[:80]
+        if not text:
+            continue
+        text = text.replace("\n", " ")
+        likes = p.get("likeCount", 0)
+        is_repost = p.get("isRepost", False)
+        prefix = "Shared: " if is_repost else ""
+        lines.append(f'• {prefix}"{text}..." ({likes} likes)')
+
+    # Themes + engagement on one line
+    themes = enrichment_meta.get("topThemes") or []
+    engagement = enrichment_meta.get("engagementLevel") or ""
+    meta_parts = []
+    if themes:
+        meta_parts.append("Themes: " + " · ".join(themes[:4]))
+    if engagement:
+        meta_parts.append(f"Engagement: {engagement}")
+    if meta_parts:
+        lines.append(" | ".join(meta_parts))
+
+    return "\n".join(lines)
+
+
+def _format_count(n: int) -> str:
+    """Format large numbers: 10216 -> '10.2K', 446 -> '446'."""
+    if n >= 1000:
+        return f"{n / 1000:.1f}K"
+    return str(n)
 
 
 def build_outreach_edit_modal(outreach_id: str, current_draft: str) -> dict:
@@ -460,6 +590,17 @@ def handle_outreach_context_submit(supabase_client: Client, outreach_id: str, op
     draft_text = generate_outreach_draft(row)
     db.update_outreach(outreach_id, {"research": research, "draft_message": draft_text})
 
+    updated = db.get_outreach(outreach_id)
+    refresh_outreach_slack_message(updated)
+
+
+def handle_outreach_redraft(supabase_client: Client, outreach_id: str) -> None:
+    """Redraft the outreach message with a different angle, refresh the Slack card."""
+    from app.drafter import redraft_outreach
+
+    redraft_outreach(supabase_client, outreach_id)
+
+    # Refresh the Slack card in place — enrichment stays, only draft changes
     updated = db.get_outreach(outreach_id)
     refresh_outreach_slack_message(updated)
 

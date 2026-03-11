@@ -138,6 +138,8 @@ def _upsert_outreach_person(
     row: dict, company_record_id: str | None, api_key: str
 ) -> str:
     """Upsert a person in Attio from an outreach row. Returns record_id."""
+    description = _build_attio_description(row)
+
     values: dict = {
         "name": [
             {
@@ -148,9 +150,7 @@ def _upsert_outreach_person(
         ],
         "job_title": [row.get("headline") or ""],
         "linkedin": [row.get("linkedin_profile_url") or ""],
-        "description": [
-            f"LinkedIn connection — connected {row.get('connection_since', 'unknown')}"
-        ],
+        "description": [description],
     }
 
     if company_record_id:
@@ -167,6 +167,124 @@ def _upsert_outreach_person(
         )
         resp.raise_for_status()
         return resp.json()["data"]["id"]["record_id"]
+
+
+def _build_attio_description(row: dict) -> str:
+    """
+    Build a rich description for Attio from enrichment data.
+
+    If enrichment exists, includes: about summary, experience, education,
+    content themes, and engagement level.
+    Falls back to basic connection info if no enrichment.
+    """
+    research = row.get("research") or {}
+    profile = research.get("profile") or {}
+    enrichment_meta = research.get("enrichment_meta") or {}
+
+    # Fallback: no enrichment
+    if not profile:
+        return f"LinkedIn connection — connected {row.get('connection_since', 'unknown')}"
+
+    parts = []
+
+    # About section
+    if profile.get("summary"):
+        parts.append(profile["summary"][:400])
+
+    # Experience
+    for exp in (profile.get("experience") or [])[:3]:
+        title = exp.get("title", "")
+        company = exp.get("companyName", "")
+        date_range = exp.get("dateRange", "")
+        if title and company:
+            line = f"{title} at {company}"
+            if date_range:
+                line += f" ({date_range})"
+            parts.append(line)
+
+    # Education
+    for edu in (profile.get("education") or [])[:2]:
+        school = edu.get("schoolName", "")
+        degree = edu.get("degree", "")
+        if school:
+            parts.append(f"{degree} — {school}" if degree else school)
+
+    # Themes + engagement
+    themes = enrichment_meta.get("topThemes") or []
+    engagement = enrichment_meta.get("engagementLevel") or ""
+    if themes:
+        parts.append(f"Content themes: {', '.join(themes)}")
+    if engagement:
+        parts.append(f"Engagement level: {engagement}")
+
+    # Connection date
+    parts.append(f"Connected: {row.get('connection_since', 'unknown')}")
+
+    return "\n".join(parts)
+
+
+def _add_enrichment_note(person_record_id: str, row: dict, api_key: str) -> None:
+    """
+    Add a note to the Attio person record with enrichment activity summary.
+
+    Only adds a note if there's actual enrichment data (posts, themes).
+    Skips silently if no enrichment or if the API call fails.
+    """
+    research = row.get("research") or {}
+    posts = research.get("recent_posts") or []
+    enrichment_meta = research.get("enrichment_meta") or {}
+
+    if not posts and not enrichment_meta:
+        return
+
+    lines = [f"LinkedIn Enrichment — {row.get('full_name', '')}"]
+    lines.append(f"Synced: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    lines.append("")
+
+    # Themes
+    themes = enrichment_meta.get("topThemes") or []
+    if themes:
+        lines.append(f"Content themes: {', '.join(themes)}")
+
+    engagement = enrichment_meta.get("engagementLevel") or ""
+    if engagement:
+        lines.append(f"Engagement level: {engagement}")
+
+    # Recent posts summary
+    if posts:
+        lines.append("")
+        lines.append(f"Recent activity ({len(posts)} posts):")
+        for p in posts[:5]:
+            text = (p.get("text") or p.get("commentary") or "")[:120]
+            if not text:
+                continue
+            text = text.replace("\n", " ")
+            likes = p.get("likeCount", 0)
+            is_repost = p.get("isRepost", False)
+            prefix = "[Shared] " if is_repost else ""
+            lines.append(f"- {prefix}{text}... ({likes} likes)")
+
+    note_body = "\n".join(lines)
+
+    try:
+        with httpx.Client(timeout=ATTIO_TIMEOUT) as http:
+            resp = http.post(
+                f"{ATTIO_API}/notes",
+                json={
+                    "data": {
+                        "parent_object": "people",
+                        "parent_record_id": person_record_id,
+                        "title": "LinkedIn Enrichment",
+                        "format": "plaintext",
+                        "content": note_body,
+                    }
+                },
+                headers=_headers(api_key),
+            )
+            resp.raise_for_status()
+            logger.info("[outreach:attio] Enrichment note added for %s", row.get("full_name"))
+    except Exception:
+        logger.exception("[outreach:attio] Failed to add enrichment note for %s", row.get("full_name"))
 
 
 def sync_outreach_to_attio(supabase_client: Client, outreach_row: dict) -> dict:
@@ -190,6 +308,9 @@ def sync_outreach_to_attio(supabase_client: Client, outreach_row: dict) -> dict:
 
     person_record_id = _upsert_outreach_person(outreach_row, company_record_id, api_key)
     logger.info("[outreach:attio] Person upserted: %s -> %s", outreach_row.get("full_name"), person_record_id)
+
+    # Add enrichment note with recent activity summary (if available)
+    _add_enrichment_note(person_record_id, outreach_row, api_key)
 
     db.update_outreach(outreach_row["id"], {
         "attio_person_record_id": person_record_id,

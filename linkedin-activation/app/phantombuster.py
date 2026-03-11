@@ -11,6 +11,8 @@ from app.config import (
     PHANTOMBUSTER_API_KEY,
     PB_CONNECTIONS_AGENT_ID,
     PB_MESSAGE_SENDER_AGENT_ID,
+    PB_PROFILE_SCRAPER_ID,
+    PB_ACTIVITY_EXTRACTOR_ID,
     PB_WEBHOOK_SECRET,
 )
 
@@ -46,6 +48,20 @@ def fetch_agent_info(agent_id: str) -> dict:
     return resp.json()
 
 
+def fetch_agent_status(agent_id: str) -> dict:
+    """GET /agents/fetch — returns full agent state including lastEndMessage."""
+    resp = httpx.get(f"{BASE_URL}/agents/fetch", headers=_headers(), params={"id": agent_id})
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_agent_output(agent_id: str) -> dict:
+    """GET /agents/fetch-output — returns the agent's most recent result data."""
+    resp = httpx.get(f"{BASE_URL}/agents/fetch-output", headers=_headers(), params={"id": agent_id})
+    resp.raise_for_status()
+    return resp.json()
+
+
 def download_result_csv(s3_folder: str, org_s3_folder: str, file_name: str = "result.csv") -> str:
     """Download a result file from PhantomBuster's S3 bucket."""
     url = f"{S3_BASE}/{org_s3_folder}/{s3_folder}/{file_name}"
@@ -67,6 +83,23 @@ def launch_connections_export(date_after: str) -> dict:
     return launch_agent(PB_CONNECTIONS_AGENT_ID, {
         "onlyRetrieveProfilesAfterDate": True,
         "dateAfter": date_after,
+    })
+
+
+def launch_profile_scraper(profile_url: str) -> dict:
+    """Launch Profile Scraper phantom for a single LinkedIn profile."""
+    return launch_agent(PB_PROFILE_SCRAPER_ID, {
+        "spreadsheetUrl": profile_url,
+        "numberOfProfilesPerLaunch": 1,
+    })
+
+
+def launch_activity_extractor(profile_url: str, num_activities: int = 10) -> dict:
+    """Launch Activity Extractor phantom for a single LinkedIn profile."""
+    return launch_agent(PB_ACTIVITY_EXTRACTOR_ID, {
+        "spreadsheetUrl": profile_url,
+        "numberOfProfilesPerLaunch": 1,
+        "numberOfActivitiesPerProfile": num_activities,
     })
 
 

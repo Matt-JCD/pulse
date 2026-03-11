@@ -35,7 +35,7 @@ from app.send_launcher import launch_approved_sends
 from app.slack_bot import (
     handle_outreach_approve, handle_outreach_edit, handle_outreach_edit_submit,
     handle_outreach_reject, handle_outreach_context, handle_outreach_context_submit,
-    delete_outreach_slack_message,
+    handle_outreach_redraft, delete_outreach_slack_message,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -235,10 +235,11 @@ async def send_simon_test_job():
     Draft and send a message to Simon Russell entirely server-side using live env vars.
     """
     from app.drafter import generate_outreach_draft
-    from app.linkdapi import enrich_profile
+    from app.pb_chain import enrich_contact
 
     profile_url = "https://www.linkedin.com/in/simonrussell/"
-    research = await asyncio.to_thread(enrich_profile, "simonrussell")
+    enrichment = await asyncio.to_thread(enrich_contact, profile_url)
+    research = enrichment.research
     profile = research.get("profile") or {}
     row = {
         "full_name": " ".join(part for part in [profile.get("firstName"), profile.get("lastName")] if part).strip() or "Simon Russell",
@@ -255,6 +256,7 @@ async def send_simon_test_job():
         "status": "launched",
         "profile_url": profile_url,
         "draft_message": draft_text,
+        "enrichment_quality": {"profile_ok": enrichment.profile_ok, "activity_ok": enrichment.activity_ok},
         **result,
     }
 
@@ -443,7 +445,7 @@ async def purge_outreach_slack_cards(limit: int = Query(500, ge=1, le=1000)):
     deleted = 0
     skipped = 0
     scanned = 0
-    action_ids = {"outreach_approve", "outreach_edit", "outreach_reject"}
+    action_ids = {"outreach_approve", "outreach_edit", "outreach_redraft", "outreach_reject"}
 
     for message in resp.get("messages", []):
         scanned += 1
@@ -812,6 +814,13 @@ async def slack_events(request: Request):
                     supabase_client = db.get_db()
                     asyncio.create_task(
                         asyncio.to_thread(handle_outreach_context, supabase_client, outreach_id, trigger_id)
+                    )
+
+                elif action_id == "outreach_redraft":
+                    logger.info("[outreach:slack] Redraft action for %s", outreach_id)
+                    supabase_client = db.get_db()
+                    asyncio.create_task(
+                        asyncio.to_thread(handle_outreach_redraft, supabase_client, outreach_id)
                     )
 
                 elif action_id == "outreach_reject":
