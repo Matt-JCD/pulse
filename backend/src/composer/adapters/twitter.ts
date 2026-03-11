@@ -1,6 +1,6 @@
 import OAuth from 'oauth-1.0a';
 import crypto from 'crypto';
-import type { PlatformResult } from '../types.js';
+import type { ComposerPost, PlatformResult } from '../types.js';
 
 const TWITTER_TWEET_URL = 'https://api.twitter.com/2/tweets';
 
@@ -8,7 +8,7 @@ const TWITTER_TWEET_URL = 'https://api.twitter.com/2/tweets';
  * Publishes a tweet to X using the v2 API with OAuth 1.0a user-context auth.
  * Never throws — always returns a PlatformResult.
  */
-export async function publish(content: string): Promise<PlatformResult> {
+export async function publish(post: ComposerPost): Promise<PlatformResult> {
   try {
     const apiKey = process.env.X_API_KEY;
     const apiSecret = process.env.X_API_SECRET;
@@ -24,7 +24,7 @@ export async function publish(content: string): Promise<PlatformResult> {
     }
 
     // X enforces 280 chars. Truncate with ellipsis if needed.
-    const tweetText = content.length > 280 ? content.slice(0, 277) + '...' : content;
+    const tweetText = post.content.length > 280 ? post.content.slice(0, 277) + '...' : post.content;
 
     const oauth = new OAuth({
       consumer: { key: apiKey, secret: apiSecret },

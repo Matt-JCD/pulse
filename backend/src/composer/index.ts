@@ -50,7 +50,7 @@ export async function publishPost(post: ComposerPost): Promise<void> {
   }
 
   console.log(`[composer] Publishing post #${post.id} [${post.account}] to ${platform}...`);
-  const result = await adapter.publish(post.content);
+  const result = await adapter.publish(post);
 
   if (result.success) {
     await supabase

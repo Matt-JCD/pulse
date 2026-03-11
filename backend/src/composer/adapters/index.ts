@@ -1,9 +1,9 @@
-import type { Platform, PlatformResult } from '../types.js';
+import type { Platform, PlatformResult, ComposerPost } from '../types.js';
 import * as twitter from './twitter.js';
 import * as linkedin from './linkedin.js';
 
 export interface PlatformAdapter {
-  publish(content: string): Promise<PlatformResult>;
+  publish(post: ComposerPost): Promise<PlatformResult>;
 }
 
 const adapters: Record<Platform, PlatformAdapter> = {

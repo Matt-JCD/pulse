@@ -6,6 +6,11 @@ const LINKEDIN_PREFACTOR_ACCESS_TOKEN = process.env.LINKEDIN_PREFACTOR_ACCESS_TO
 const LINKEDIN_ORG_ID = process.env.LINKEDIN_ORG_ID;
 const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN;
 
+function normalizeLinkedInShareUrn(postId: string | null): string | null {
+  if (!postId) return null;
+  return postId.startsWith('urn:li:') ? postId : `urn:li:share:${postId}`;
+}
+
 interface EngagementStats {
   impressions: number;
   likes: number;
@@ -29,8 +34,13 @@ async function fetchLinkedInEngagement(post: ComposerPost): Promise<EngagementSt
         return ZERO_STATS;
       }
 
+      const socialActionUrn = normalizeLinkedInShareUrn(post.platform_post_id);
+      if (!socialActionUrn) {
+        return ZERO_STATS;
+      }
+
       const res = await fetch(
-        `https://api.linkedin.com/v2/socialActions/${post.platform_post_id}`,
+        `https://api.linkedin.com/v2/socialActions/${socialActionUrn}`,
         { headers: { Authorization: `Bearer ${LINKEDIN_MATT_ACCESS_TOKEN}` } },
       );
 
@@ -58,8 +68,13 @@ async function fetchLinkedInEngagement(post: ComposerPost): Promise<EngagementSt
       return ZERO_STATS;
     }
 
+    const shareUrn = normalizeLinkedInShareUrn(post.platform_post_id);
+    if (!shareUrn) {
+      return ZERO_STATS;
+    }
+
     const res = await fetch(
-      `https://api.linkedin.com/v2/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=${LINKEDIN_ORG_ID}&shares=urn:li:share:${post.platform_post_id}`,
+      `https://api.linkedin.com/v2/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=${LINKEDIN_ORG_ID}&shares=${shareUrn}`,
       { headers: { Authorization: `Bearer ${LINKEDIN_PREFACTOR_ACCESS_TOKEN}` } },
     );
 

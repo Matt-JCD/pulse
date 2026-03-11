@@ -1,20 +1,117 @@
-import type { PlatformResult } from '../types.js';
+import type { AccountSlug, ComposerPost, PlatformResult } from '../types.js';
 
-// TODO: LinkedIn API access is pending.
-// When approved, implement:
-// 1. OAuth 2.0 authentication with LINKEDIN_ACCESS_TOKEN
-// 2. POST to https://api.linkedin.com/v2/ugcPosts (or /rest/posts with v2 API)
-// 3. Include LINKEDIN_PERSON_URN as the author
-// 4. Return platform_post_id and post URL on success
+const LINKEDIN_UGC_POSTS_URL = 'https://api.linkedin.com/v2/ugcPosts';
+
+interface LinkedInTarget {
+  accessToken: string;
+  authorUrn: string;
+}
+
+function isUrn(value: string): boolean {
+  return value.startsWith('urn:li:');
+}
+
+export function normalizeLinkedInAuthorUrn(value: string): string {
+  const trimmed = value.trim();
+  return isUrn(trimmed) ? trimmed : `urn:li:person:${trimmed}`;
+}
+
+export function normalizeLinkedInPostUrn(value: string): string {
+  const trimmed = value.trim();
+  return isUrn(trimmed) ? trimmed : `urn:li:share:${trimmed}`;
+}
+
+export function toLinkedInFeedUrl(postUrn: string): string {
+  return `https://www.linkedin.com/feed/update/${postUrn}/`;
+}
+
+export function resolveLinkedInTarget(
+  account: AccountSlug,
+  env: NodeJS.ProcessEnv = process.env,
+): LinkedInTarget | { error: string } {
+  if (account === 'matt_linkedin') {
+    const accessToken = env.LINKEDIN_MATT_ACCESS_TOKEN;
+    const authorUrn = env.LINKEDIN_MATT_PERSON_URN;
+
+    if (!accessToken || !authorUrn) {
+      return {
+        error: 'LinkedIn Matt publishing is not configured. Set LINKEDIN_MATT_ACCESS_TOKEN and LINKEDIN_MATT_PERSON_URN.',
+      };
+    }
+
+    return {
+      accessToken,
+      authorUrn: normalizeLinkedInAuthorUrn(authorUrn),
+    };
+  }
+
+  return {
+    error: `LinkedIn publishing is only enabled for matt_linkedin right now. ${account} should stay disabled until page posting is approved.`,
+  };
+}
 
 /**
- * Stub — LinkedIn API access is not yet configured.
- * Returns a descriptive error so the orchestrator knows why.
+ * Publishes a text-only LinkedIn post via the Share on LinkedIn UGC API.
+ * This currently targets Matt's personal account only.
  */
-export async function publish(_content: string): Promise<PlatformResult> {
-  return {
-    platform: 'linkedin',
-    success: false,
-    error: 'LinkedIn API access pending — not yet configured.',
-  };
+export async function publish(post: ComposerPost): Promise<PlatformResult> {
+  try {
+    const target = resolveLinkedInTarget(post.account);
+    if ('error' in target) {
+      return {
+        platform: 'linkedin',
+        success: false,
+        error: target.error,
+      };
+    }
+
+    const res = await fetch(LINKEDIN_UGC_POSTS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${target.accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+      body: JSON.stringify({
+        author: target.authorUrn,
+        lifecycleState: 'PUBLISHED',
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': {
+            shareCommentary: {
+              text: post.content,
+            },
+            shareMediaCategory: 'NONE',
+          },
+        },
+        visibility: {
+          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return {
+        platform: 'linkedin',
+        success: false,
+        error: `LinkedIn API ${res.status}: ${body}`,
+      };
+    }
+
+    const restLiId = res.headers.get('x-restli-id');
+    const postUrn = restLiId ? normalizeLinkedInPostUrn(restLiId) : undefined;
+
+    return {
+      platform: 'linkedin',
+      success: true,
+      postId: postUrn,
+      url: postUrn ? toLinkedInFeedUrl(postUrn) : undefined,
+    };
+  } catch (err) {
+    return {
+      platform: 'linkedin',
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
