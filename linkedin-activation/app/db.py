@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from supabase import create_client, Client
 
@@ -168,6 +170,25 @@ def set_error(connection_id: str, status: str, message: str):
 # ---------------------------------------------------------------------------
 
 OUTREACH_TABLE = "linkedin_outreach"
+try:
+    SYDNEY_TZ = ZoneInfo("Australia/Sydney")
+except ZoneInfoNotFoundError:  # pragma: no cover - Windows test env fallback
+    SYDNEY_TZ = datetime.now().astimezone().tzinfo or timezone.utc
+
+
+def _sydney_day_start_utc() -> datetime:
+    now_local = datetime.now(SYDNEY_TZ)
+    local_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return local_start.astimezone(timezone.utc)
+
+
+def _parse_slack_ts(ts: str | None) -> float | None:
+    if not ts:
+        return None
+    try:
+        return float(ts)
+    except (TypeError, ValueError):
+        return None
 
 
 def upsert_outreach_connection(data: dict) -> dict:
@@ -276,19 +297,29 @@ def get_approved_outreach(limit: int = 50) -> list[dict]:
 
 
 def get_sent_today_count() -> int:
-    """Count outreach rows with status 'sent' whose sent_at is today (UTC)."""
-    from datetime import datetime, timezone
-
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """Count outreach rows with status 'sent' whose sent_at is today in Sydney."""
+    sent_after = _sydney_day_start_utc().isoformat().replace("+00:00", "Z")
     resp = (
         get_db()
         .table(OUTREACH_TABLE)
         .select("id", count="exact")
         .eq("status", "sent")
-        .gte("sent_at", f"{today}T00:00:00Z")
+        .gte("sent_at", sent_after)
         .execute()
     )
     return resp.count or 0
+
+
+def get_outreach_slack_posted_today_count() -> int:
+    """Count outreach rows whose Slack approval card was posted today in Sydney."""
+    day_start_epoch = _sydney_day_start_utc().timestamp()
+    rows = get_db().table(OUTREACH_TABLE).select("slack_message_ts").execute().data
+    count = 0
+    for row in rows:
+        ts = _parse_slack_ts(row.get("slack_message_ts"))
+        if ts is not None and ts >= day_start_epoch:
+            count += 1
+    return count
 
 
 def get_unsynced_outreach(

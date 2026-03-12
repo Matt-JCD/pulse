@@ -7,77 +7,79 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: LI_EMAIL
-        sync: false
-      - key: LI_PASSWORD
-        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: ATTIO_API_KEY
+        sync: false
+      - key: PHANTOMBUSTER_API_KEY
+        sync: false
+      - key: PB_CONNECTIONS_AGENT_ID
+        sync: false
+      - key: PB_MESSAGE_SENDER_AGENT_ID
+        sync: false
+      - key: PB_PROFILE_SCRAPER_ID
+        sync: false
+      - key: PB_ACTIVITY_EXTRACTOR_ID
+        sync: false
+      - key: PB_WEBHOOK_SECRET
         sync: false
       - key: SLACK_BOT_TOKEN
         sync: false
       - key: SLACK_SIGNING_SECRET
         sync: false
-      - key: SLACK_CHANNEL
+      - key: OUTREACH_SLACK_CHANNEL
         sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: DAILY_SEND_LIMIT
+        sync: false
+      - key: DRAFT_DAILY_LIMIT
+        sync: false
+      - key: DRAFT_BATCH_LIMIT
+        sync: false
+      - key: SEND_BATCH_LIMIT
+        sync: false
+      - key: SEND_LAUNCH_PAUSE_SECONDS
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
 
-  - type: cron
-    rootDir: linkedin-activation
-    name: linkedin-activation-cron
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    schedule: "0 21,1,5,9 * * *"
-    command: python -m app.pipeline
-    envVars:
-      - fromService:
-          name: linkedin-activation
-          type: web
-
-  # Outreach pipeline cron jobs (hit FastAPI endpoints on the web service)
-  # Detection: 9am + 5pm AEST weekdays (UTC: 23:00 Sun-Thu + 07:00 Mon-Fri)
+  # Outreach pipeline cron jobs (hit the current FastAPI job endpoints on the web service)
+  # APP_BASE_URL should be the public web URL without a trailing slash.
+  # Detection: every 30 minutes, every day.
   - type: cron
     name: outreach-detect
     runtime: python
     buildCommand: echo "no build needed"
-    schedule: "0 23 * * 0-4"
-    command: curl -s -X POST https://pulse-by-prefactor-1.onrender.com/jobs/detect-new-connections
-    envVars: []
+    schedule: "*/30 * * * *"
+    command: 'curl -fsS -X POST "${APP_BASE_URL%/}/jobs/detect-new-connections"'
+    envVars:
+      - key: APP_BASE_URL
+        sync: false
 
-  - type: cron
-    name: outreach-detect-afternoon
-    runtime: python
-    buildCommand: echo "no build needed"
-    schedule: "0 7 * * 1-5"
-    command: curl -s -X POST https://pulse-by-prefactor-1.onrender.com/jobs/detect-new-connections
-    envVars: []
-
-  # Draft: every 15 min
+  # Draft + push to Slack: every 30 minutes, every day.
   - type: cron
     name: outreach-draft
     runtime: python
     buildCommand: echo "no build needed"
-    schedule: "*/15 * * * *"
-    command: curl -s -X POST https://pulse-by-prefactor-1.onrender.com/jobs/draft-outreach
-    envVars: []
+    schedule: "*/30 * * * *"
+    command: 'curl -fsS -X POST "${APP_BASE_URL%/}/jobs/draft-outreach?limit=5"'
+    envVars:
+      - key: APP_BASE_URL
+        sync: false
 
-  # Send: every 30 min during business hours (9am-6pm AEST = 23:00-08:00 UTC)
+  # Send: every 30 minutes, every day.
+  # The app enforces the per-run batch cap and daily max.
   - type: cron
-    name: outreach-send-evening
+    name: outreach-send
     runtime: python
     buildCommand: echo "no build needed"
-    schedule: "*/30 23 * * 0-4"
-    command: curl -s -X POST https://pulse-by-prefactor-1.onrender.com/jobs/launch-approved-sends
-    envVars: []
-
-  - type: cron
-    name: outreach-send-morning
-    runtime: python
-    buildCommand: echo "no build needed"
-    schedule: "*/30 0-8 * * 1-5"
-    command: curl -s -X POST https://pulse-by-prefactor-1.onrender.com/jobs/launch-approved-sends
-    envVars: []
+    schedule: "*/30 * * * *"
+    command: 'curl -fsS -X POST "${APP_BASE_URL%/}/jobs/launch-approved-sends?limit=5"'
+    envVars:
+      - key: APP_BASE_URL
+        sync: false

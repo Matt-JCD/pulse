@@ -521,7 +521,6 @@ def delete_outreach_slack_message(outreach_row: dict) -> bool:
         logger.exception("Slack outreach message delete failed for %s", outreach_row.get("id"))
         return False
 
-
 def handle_outreach_approve(supabase_client: Client, outreach_id: str) -> None:
     """Approve outreach: set approved_message, approved_at, transition to approved."""
     row = db.get_outreach(outreach_id)

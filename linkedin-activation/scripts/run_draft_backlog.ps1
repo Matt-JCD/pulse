@@ -1,11 +1,16 @@
 param(
-    [string]$BaseUrl = "https://pulse-by-prefactor-1.onrender.com",
+    [string]$BaseUrl = "",
     [int]$BatchSize = 5,
-    [int]$PauseSeconds = 90,
+    [int]$PauseSeconds = 1800,
     [int]$MaxBatches = 0
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $BaseUrl) {
+    $BaseUrl = if ($env:APP_BASE_URL) { $env:APP_BASE_URL } else { "https://linkedin-activation.onrender.com" }
+}
+$BaseUrl = $BaseUrl.TrimEnd("/")
 
 $batch = 0
 
@@ -29,4 +34,3 @@ while ($true) {
 
     Start-Sleep -Seconds $PauseSeconds
 }
-

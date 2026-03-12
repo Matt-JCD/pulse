@@ -1,11 +1,16 @@
 param(
-    [string]$BaseUrl = "https://pulse-by-prefactor-1.onrender.com",
+    [string]$BaseUrl = "",
     [int]$BatchSize = 1,
     [int]$PauseSeconds = 90,
     [int]$SeenCount = 475
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $BaseUrl) {
+    $BaseUrl = if ($env:APP_BASE_URL) { $env:APP_BASE_URL } else { "https://linkedin-activation.onrender.com" }
+}
+$BaseUrl = $BaseUrl.TrimEnd("/")
 
 while ($true) {
     $summary = Invoke-RestMethod -Method Get -Uri "$BaseUrl/jobs/outreach-import-summary?seen_count=$SeenCount"

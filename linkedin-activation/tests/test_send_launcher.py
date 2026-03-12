@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from app.outreach_policy import filter_outreach_candidate, sanitize_message_for_pb
-from app.send_launcher import launch_approved_sends
+from app.send_launcher import launch_approved_sends, launch_outreach_send
 
 
 # ---------------------------------------------------------------------------
@@ -30,6 +30,7 @@ def _make_row(id: str, **overrides) -> dict:
 # ---------------------------------------------------------------------------
 
 class TestLaunchApprovedSends:
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -54,7 +55,7 @@ class TestLaunchApprovedSends:
     @patch("app.send_launcher.db")
     @patch("app.send_launcher.launch_message_sender")
     def test_respects_daily_limit(self, mock_launch, mock_db, _mock_transition, _sleep):
-        mock_db.get_sent_today_count.return_value = 15  # At limit (default 15)
+        mock_db.get_sent_today_count.return_value = 50  # At limit (default 50)
         supabase = MagicMock()
 
         result = launch_approved_sends(supabase)
@@ -68,7 +69,7 @@ class TestLaunchApprovedSends:
     @patch("app.send_launcher.db")
     @patch("app.send_launcher.launch_message_sender")
     def test_can_bypass_daily_limit(self, mock_launch, mock_db, mock_transition, _sleep):
-        mock_db.get_sent_today_count.return_value = 15
+        mock_db.get_sent_today_count.return_value = 50
         mock_db.get_approved_outreach.return_value = [_make_row("r1"), _make_row("r2")]
         mock_launch.return_value = {"containerId": "c-1"}
         supabase = MagicMock()
@@ -98,6 +99,21 @@ class TestLaunchApprovedSends:
         # Should request at most 2 rows (limit=remaining)
         mock_db.get_approved_outreach.assert_called_once_with(limit=2)
 
+    @patch("app.send_launcher.SEND_BATCH_LIMIT", 5)
+    @patch("app.send_launcher.time.sleep")
+    @patch("app.send_launcher.transition_status")
+    @patch("app.send_launcher.db")
+    @patch("app.send_launcher.launch_message_sender")
+    def test_caps_each_run_to_batch_limit(self, mock_launch, mock_db, _mock_transition, _sleep):
+        mock_db.get_sent_today_count.return_value = 0
+        mock_db.get_approved_outreach.return_value = [_make_row("r1")]
+        mock_launch.return_value = {"containerId": "c-1"}
+        supabase = MagicMock()
+
+        launch_approved_sends(supabase, limit=20)
+
+        mock_db.get_approved_outreach.assert_called_once_with(limit=5)
+
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -112,6 +128,7 @@ class TestLaunchApprovedSends:
 
         mock_db.get_approved_outreach.assert_called_once_with(limit=1)
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -130,6 +147,7 @@ class TestLaunchApprovedSends:
         first_call = mock_launch.call_args_list[0]
         assert first_call[0][0] == "https://linkedin.com/in/user-old"
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -147,6 +165,7 @@ class TestLaunchApprovedSends:
         assert result["launched"] == 0
         mock_launch.assert_not_called()
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -166,6 +185,7 @@ class TestLaunchApprovedSends:
             "Approved text",
         )
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -185,6 +205,7 @@ class TestLaunchApprovedSends:
         assert "—" not in launched_message
         assert "“" not in launched_message
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -201,6 +222,7 @@ class TestLaunchApprovedSends:
             "r1", {"pb_send_container_id": "pb-container-456"}
         )
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -220,6 +242,7 @@ class TestLaunchApprovedSends:
         assert len(result["errors"]) == 1
         assert "r1" in result["errors"][0]
 
+    @patch("app.send_launcher.SEND_LAUNCH_PAUSE_SECONDS", 2)
     @patch("app.send_launcher.time.sleep")
     @patch("app.send_launcher.transition_status")
     @patch("app.send_launcher.db")
@@ -238,6 +261,43 @@ class TestLaunchApprovedSends:
         # Sleep called after first launch (before second), not after last
         mock_sleep.assert_called_with(2)
         assert mock_sleep.call_count == 1
+
+
+class TestLaunchOutreachSend:
+    @patch("app.send_launcher.transition_status")
+    @patch("app.send_launcher.db")
+    @patch("app.send_launcher.launch_message_sender")
+    def test_launches_specific_approved_row(self, mock_launch, mock_db, mock_transition):
+        mock_db.get_outreach.return_value = _make_row("r1")
+        mock_db.get_sent_today_count.return_value = 0
+        mock_launch.return_value = {"containerId": "c-1"}
+        supabase = MagicMock()
+
+        result = launch_outreach_send(supabase, "r1")
+
+        assert result["status"] == "launched"
+        mock_launch.assert_called_once_with("https://linkedin.com/in/user-r1", "Hello from row r1!")
+        mock_transition.assert_called_once_with(supabase, "r1", "send_queued")
+
+    @patch("app.send_launcher.db")
+    def test_defers_when_daily_limit_reached(self, mock_db):
+        mock_db.get_outreach.return_value = _make_row("r1")
+        mock_db.get_sent_today_count.return_value = 50
+        supabase = MagicMock()
+
+        result = launch_outreach_send(supabase, "r1")
+
+        assert result == {"status": "deferred", "reason": "daily_limit"}
+
+    @patch("app.send_launcher.db")
+    def test_skips_non_approved_row(self, mock_db):
+        mock_db.get_outreach.return_value = _make_row("r1", status="awaiting_review")
+        supabase = MagicMock()
+
+        result = launch_outreach_send(supabase, "r1")
+
+        assert result["status"] == "skipped"
+        assert "awaiting_review" in result["reason"]
 
 
 # ---------------------------------------------------------------------------

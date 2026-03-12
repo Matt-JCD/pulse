@@ -9,6 +9,7 @@ from app.drafter import (
     draft_and_update_outreach,
     draft_all_detected,
     OUTREACH_SYSTEM,
+    redraft_outreach,
 )
 
 
@@ -208,6 +209,7 @@ class TestDraftAllDetected:
     @patch("app.drafter.draft_and_update_outreach")
     @patch("app.drafter.db")
     def test_processes_all_detected_rows(self, mock_db, mock_draft):
+        mock_db.get_outreach_slack_posted_today_count.return_value = 0
         mock_db.get_outreach_by_status.return_value = [
             {**SAMPLE_ROW, "id": "id-1"},
             {**SAMPLE_ROW, "id": "id-2"},
@@ -218,13 +220,14 @@ class TestDraftAllDetected:
 
         assert count == 2
         assert mock_draft.call_count == 2
-        mock_db.get_outreach_by_status.assert_called_once_with("detected", limit=100)
+        mock_db.get_outreach_by_status.assert_called_once_with("detected", limit=5)
         mock_draft.assert_any_call(mock_supabase, "id-1")
         mock_draft.assert_any_call(mock_supabase, "id-2")
 
     @patch("app.drafter.draft_and_update_outreach")
     @patch("app.drafter.db")
     def test_respects_limit(self, mock_db, mock_draft):
+        mock_db.get_outreach_slack_posted_today_count.return_value = 0
         mock_db.get_outreach_by_status.return_value = [
             {**SAMPLE_ROW, "id": "id-1"},
         ]
@@ -233,11 +236,12 @@ class TestDraftAllDetected:
         count = draft_all_detected(mock_supabase, limit=25)
 
         assert count == 1
-        mock_db.get_outreach_by_status.assert_called_once_with("detected", limit=25)
+        mock_db.get_outreach_by_status.assert_called_once_with("detected", limit=5)
 
     @patch("app.drafter.draft_and_update_outreach")
     @patch("app.drafter.db")
     def test_continues_on_error(self, mock_db, mock_draft):
+        mock_db.get_outreach_slack_posted_today_count.return_value = 0
         mock_db.get_outreach_by_status.return_value = [
             {**SAMPLE_ROW, "id": "id-1"},
             {**SAMPLE_ROW, "id": "id-2"},
@@ -253,6 +257,7 @@ class TestDraftAllDetected:
     @patch("app.drafter.draft_and_update_outreach")
     @patch("app.drafter.db")
     def test_returns_zero_when_no_rows(self, mock_db, mock_draft):
+        mock_db.get_outreach_slack_posted_today_count.return_value = 0
         mock_db.get_outreach_by_status.return_value = []
         mock_supabase = MagicMock()
 
@@ -260,3 +265,39 @@ class TestDraftAllDetected:
 
         assert count == 0
         mock_draft.assert_not_called()
+
+    @patch("app.drafter.draft_and_update_outreach")
+    @patch("app.drafter.db")
+    def test_respects_daily_review_limit(self, mock_db, mock_draft):
+        mock_db.get_outreach_slack_posted_today_count.return_value = 50
+        mock_supabase = MagicMock()
+
+        count = draft_all_detected(mock_supabase, limit=5)
+
+        assert count == 0
+        mock_db.get_outreach_by_status.assert_not_called()
+        mock_draft.assert_not_called()
+
+
+class TestRedraftOutreach:
+    @patch("app.drafter.OpenAI")
+    @patch("app.drafter.db")
+    def test_updates_only_draft_message(self, mock_db, mock_openai_cls):
+        mock_client = MagicMock()
+        mock_openai_cls.return_value = mock_client
+        mock_client.chat.completions.create.return_value = _mock_openai_response("Different angle")
+
+        row = {
+            **SAMPLE_ROW,
+            "research": {"profile": {"summary": "Builder"}},
+            "previous_drafts": ["older draft"],
+        }
+        mock_supabase = _build_supabase_mock([row])
+
+        result = redraft_outreach(mock_supabase, "outreach-1")
+
+        assert result == "Different angle"
+        mock_db.update_outreach.assert_called_once_with(
+            "outreach-1",
+            {"draft_message": "Different angle"},
+        )

@@ -23,7 +23,6 @@ from app.config import (
     PB_CONNECTIONS_AGENT_ID,
     PB_MESSAGE_SENDER_AGENT_ID,
     SLACK_BOT_TOKEN,
-    SLACK_CHANNEL,
     SLACK_SIGNING_SECRET,
     require_env_vars,
 )
@@ -43,6 +42,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 app = FastAPI(title="LinkedIn Activation Engine")
 logger = logging.getLogger(__name__)
 _approved_send_task: asyncio.Task | None = None
+
+
+async def _run_background_slack_action(action_name: str, func, *args) -> None:
+    """Run a Slack action off-thread and log any exceptions instead of losing them."""
+    try:
+        await asyncio.to_thread(func, *args)
+    except Exception:
+        logger.exception("[outreach:slack] %s action failed", action_name)
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +110,7 @@ async def detect_new_connections_job(date_after: Optional[str] = Query(None)):
 
 
 @app.post("/jobs/draft-outreach")
-async def draft_outreach_job(limit: int = Query(25, ge=1, le=200)):
+async def draft_outreach_job(limit: int = Query(5, ge=1, le=50)):
     """Cron-triggered. Drafts messages for detected connections in batches."""
     supabase = db.get_db()
     count = await asyncio.to_thread(draft_all_detected, supabase, limit)
@@ -797,7 +804,7 @@ async def slack_events(request: Request):
                     logger.info("[outreach:slack] Approve action for %s", outreach_id)
                     supabase_client = db.get_db()
                     asyncio.create_task(
-                        asyncio.to_thread(handle_outreach_approve, supabase_client, outreach_id)
+                        _run_background_slack_action("approve", handle_outreach_approve, supabase_client, outreach_id)
                     )
 
                 elif action_id == "outreach_edit":
@@ -805,7 +812,7 @@ async def slack_events(request: Request):
                     trigger_id = payload["trigger_id"]
                     supabase_client = db.get_db()
                     asyncio.create_task(
-                        asyncio.to_thread(handle_outreach_edit, supabase_client, outreach_id, trigger_id)
+                        _run_background_slack_action("edit", handle_outreach_edit, supabase_client, outreach_id, trigger_id)
                     )
 
                 elif action_id == "outreach_context":
@@ -813,21 +820,21 @@ async def slack_events(request: Request):
                     trigger_id = payload["trigger_id"]
                     supabase_client = db.get_db()
                     asyncio.create_task(
-                        asyncio.to_thread(handle_outreach_context, supabase_client, outreach_id, trigger_id)
+                        _run_background_slack_action("context", handle_outreach_context, supabase_client, outreach_id, trigger_id)
                     )
 
                 elif action_id == "outreach_redraft":
                     logger.info("[outreach:slack] Redraft action for %s", outreach_id)
                     supabase_client = db.get_db()
                     asyncio.create_task(
-                        asyncio.to_thread(handle_outreach_redraft, supabase_client, outreach_id)
+                        _run_background_slack_action("redraft", handle_outreach_redraft, supabase_client, outreach_id)
                     )
 
                 elif action_id == "outreach_reject":
                     logger.info("[outreach:slack] Reject action for %s", outreach_id)
                     supabase_client = db.get_db()
                     asyncio.create_task(
-                        asyncio.to_thread(handle_outreach_reject, supabase_client, outreach_id)
+                        _run_background_slack_action("reject", handle_outreach_reject, supabase_client, outreach_id)
                     )
 
         elif payload_type == "view_submission":
